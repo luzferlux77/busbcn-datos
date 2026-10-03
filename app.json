@@ -1,0 +1,7 @@
+{
+  "version": "1.8.0",
+  "notes": "Actualizaciones automáticas: la red de autobuses se actualiza sola cada noche desde GitHub, y las nuevas versiones de la app se descargan e instalan solas (sin pasar la APK). Avisos de versión nueva en Ajustes.",
+  "native": 1,
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.0/busbcn-web-1.8.0.zip",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.0/BusBCN-v1.8.0.apk"
+}
