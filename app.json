@@ -1,8 +1,8 @@
 {
-  "version": "1.8.4",
-  "notes": "Prueba de actualización automática (sin cambios visibles).",
+  "version": "1.8.5",
+  "notes": "Panel deslizante mucho más fácil: se arrastra desde la barrita, la cabecera o la propia lista, responde a gestos rápidos y va más fluido.",
   "native": 1,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.4/busbcn-web-1.8.4.zip",
-  "checksum": "992bee017c8639b35eac63b1e64ae748d8949fdb54cc1c4756b6ff6c6edec118",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.4/BusBCN-v1.8.4.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.5/busbcn-web-1.8.5.zip",
+  "checksum": "48f12503f290c53ccc8d61f40cb2c0f3c70f3c281e49f8dcec0e0e3af19c6634",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.5/BusBCN-v1.8.5.apk"
 }
