@@ -1,8 +1,8 @@
 {
-  "version": "1.8.5",
-  "notes": "Panel deslizante mucho más fácil: se arrastra desde la barrita, la cabecera o la propia lista, responde a gestos rápidos y va más fluido.",
+  "version": "1.9.0",
+  "notes": "Horarios programados (🕒) cuando no hay tiempo real. Pantalla de parada rediseñada: destino y próxima llegada en grande, siguientes en orden. Mucho menos consumo de datos (el feed de AMB solo se descarga si ha cambiado y la red solo baja lo que cambia). Mejor accesibilidad y guía de bienvenida.",
   "native": 1,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.5/busbcn-web-1.8.5.zip",
-  "checksum": "48f12503f290c53ccc8d61f40cb2c0f3c70f3c281e49f8dcec0e0e3af19c6634",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.5/BusBCN-v1.8.5.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.9.0/busbcn-web-1.9.0.zip",
+  "checksum": "4b28a84ec1258e7727ebd49500e7e4e61088cf32b926f7872505b06a5f20a314",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.9.0/BusBCN-v1.9.0.apk"
 }

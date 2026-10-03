@@ -220,6 +220,70 @@ async function matchToStreets(key, pts, stopPts) {
   return out;
 }
 
+/** "25:10:00" → segundos desde la medianoche del día de servicio */
+function gtfsSecs(t) {
+  const m = /^(\d+):(\d\d):(\d\d)$/.exec((t || '').trim());
+  return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : -1;
+}
+
+const ymd = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Ventana del calendario de horarios: desde el lunes de esta semana, 9 semanas.
+ * (Empieza en lunes para que los ficheros solo cambien una vez por semana y la app descargue menos.)
+ */
+function calendarWindow() {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  base.setDate(base.getDate() - ((base.getDay() + 6) % 7));
+  const days = [];
+  for (let i = 0; i < 63; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    days.push(d);
+  }
+  return { base: ymd(base), days };
+}
+
+/** días activos de cada servicio dentro de la ventana, como cadena de 0/1 */
+function serviceMasks(zip, win) {
+  const cal = new Map();
+  for (const c of rows(zip, 'calendar.txt')) cal.set(c.service_id, c);
+  const exc = new Map();
+  for (const c of rows(zip, 'calendar_dates.txt')) {
+    if (!exc.has(c.service_id)) exc.set(c.service_id, new Map());
+    exc.get(c.service_id).set(c.date, c.exception_type);
+  }
+  const ids = new Set([...cal.keys(), ...exc.keys()]);
+  const wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const out = new Map();
+  for (const id of ids) {
+    const c = cal.get(id), e = exc.get(id);
+    let mask = '';
+    for (const d of win.days) {
+      const k = ymd(d);
+      let on = !!c && c[wd[d.getDay()]] === '1' && k >= c.start_date && k <= c.end_date;
+      const x = e?.get(k);
+      if (x === '1') on = true;
+      if (x === '2') on = false;
+      mask += on ? '1' : '0';
+    }
+    if (mask.includes('1')) out.set(id, mask);
+  }
+  return out;
+}
+
+/** huella corta de un texto (para saber qué ficheros han cambiado) */
+function shortHash(text) {
+  let h1 = 2166136261, h2 = 5381;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+    h2 = (Math.imul(h2, 33) ^ c) >>> 0;
+  }
+  return h1.toString(36) + h2.toString(36);
+}
+
 function dist(a, b) {
   const R = 6371000, toR = Math.PI / 180;
   const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
@@ -260,12 +324,15 @@ function processFeed(zip, op) {
 
   // viajes: patrón = (ruta, sentido, shape, cabecera)
   const trips = new Map();
+  const tripSvc = new Map(); // trip_id -> service_id
+  const tripStart = new Map(); // trip_id -> [secuencia, segundos] de la primera parada
   const patternCount = new Map();
   for (const t of rows(zip, 'trips.txt')) {
     if (!routes.has(t.route_id)) continue;
     if (trips.has(t.trip_id)) continue; // AMB duplica algunos trip_id con route_id compuestos
     const key = `${t.route_id}|${t.direction_id || '0'}|${t.shape_id}|${t.trip_headsign}`;
     trips.set(t.trip_id, key);
+    tripSvc.set(t.trip_id, t.service_id);
     const pc = patternCount.get(key) || { n: 0, trip: t.trip_id, route: t.route_id, dir: +(t.direction_id || 0), shape: t.shape_id, head: t.trip_headsign };
     pc.n++;
     patternCount.set(key, pc);
@@ -284,10 +351,14 @@ function processFeed(zip, op) {
     let set = stopRoutes.get(st.stop_id);
     if (!set) stopRoutes.set(st.stop_id, (set = new Set()));
     set.add(route);
+    const seq = +st.stop_sequence;
+    const secs = gtfsSecs(st.departure_time || st.arrival_time);
+    const first = tripStart.get(st.trip_id);
+    if (secs >= 0 && (!first || seq < first[0])) tripStart.set(st.trip_id, [seq, secs]);
     if (repTrips.get(st.trip_id) === key) {
       let arr = patternStops.get(key);
       if (!arr) patternStops.set(key, (arr = []));
-      arr.push([+st.stop_sequence, st.stop_id]);
+      arr.push([seq, st.stop_id, secs]);
     }
   }
 
@@ -298,8 +369,10 @@ function processFeed(zip, op) {
     arr.push([+s.shape_pt_sequence, +s.shape_pt_lat, +s.shape_pt_lon]);
   }
 
-  return { op, stations, routes, stopsById, trips, patternCount, patternStops, stopRoutes, shapes };
+  return { op, stations, routes, stopsById, trips, tripSvc, tripStart, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
 }
+
+const CAL = calendarWindow();
 
 async function main() {
   const [ambZip, tmbZip] = await Promise.all([download(AMB_GTFS, 'amb.zip'), download(TMB_GTFS, 'tmb.zip')]);
@@ -355,6 +428,7 @@ async function main() {
   mkdirSync(join(OUT, 'lines'), { recursive: true });
   const ambPatterns = {}; // prefijo trip_id AMB (4 segmentos) -> [lineIdx, patternIdx]
   let shapeBytes = 0;
+  const fileHashes = {}; // fichero de línea -> huella
   for (const feed of [tmb, amb]) {
     const P = feed.op === 'tmb' ? 't:' : 'a:';
     const byRoute = new Map();
@@ -374,7 +448,27 @@ async function main() {
         const isMain = !out.some((o) => o.d === p.dir);
         if (!isMain && p.n / totalByDir[p.dir] < 0.05) continue;
         const seq = (feed.patternStops.get(p.key) || []).sort((a, b) => a[0] - b[0]);
-        const stopKeys = seq.map(([, id]) => stopIdToKey(feed, id)).filter(Boolean);
+        const withKeys = seq.map(([, id, secs]) => [stopIdToKey(feed, id), secs]).filter(([k]) => k);
+        const stopKeys = withKeys.map(([k]) => k);
+        const t0 = withKeys.find(([, x]) => x >= 0)?.[1] ?? 0;
+        // minutos desde la salida hasta cada parada (del viaje tipo)
+        const raw = withKeys.map(([, x]) => (x >= 0 ? (x - t0) / 60 : -1));
+        // TMB solo publica la hora en algunas paradas: el resto se interpola según la distancia recorrida
+        const cumd = [0];
+        for (let i = 1; i < stopKeys.length; i++) {
+          const a = stops.get(stopKeys[i - 1]), b = stops.get(stopKeys[i]);
+          cumd.push(cumd[i - 1] + dist([a.lat, a.lon], [b.lat, b.lon]));
+        }
+        for (let i = 0; i < raw.length; i++) {
+          if (raw[i] >= 0) continue;
+          let a = i - 1, b = i + 1;
+          while (a >= 0 && raw[a] < 0) a--;
+          while (b < raw.length && raw[b] < 0) b++;
+          if (a >= 0 && b < raw.length) raw[i] = raw[a] + ((raw[b] - raw[a]) * (cumd[i] - cumd[a])) / Math.max(1, cumd[b] - cumd[a]);
+          else if (a >= 0) raw[i] = raw[a] + (cumd[i] - cumd[a]) / 200; // ~200 m/min
+          else raw[i] = 0;
+        }
+        const offsets = raw.map((x) => Math.round(x));
         if (stopKeys.length < 2) continue;
         let poly = '';
         const sh = feed.shapes.get(p.shape);
@@ -391,11 +485,36 @@ async function main() {
         }
         shapeBytes += poly.length;
         keyToIdx.set(p.key, out.length);
-        out.push({ d: p.dir, h: p.head, m: isMain ? 1 : 0, n: p.n, s: stopKeys, p: poly });
+        out.push({ d: p.dir, h: p.head, m: isMain ? 1 : 0, n: p.n, s: stopKeys, p: poly, o: offsets });
       }
       const li = lineIdx.get(P + routeId);
       lines[li].heads = out.map((o) => o.h);
-      writeFileSync(join(OUT, 'lines', `${P.replace(':', '_')}${routeId.replace(/[^\w.-]/g, '_')}.json`), JSON.stringify({ id: P + routeId, patterns: out }));
+      // horarios: salidas de cada viaje agrupadas por servicio (minutos, en diferencias) y días activos
+      const svcIdx = new Map();
+      const byPat = out.map(() => new Map());
+      for (const [tripId, key] of feed.trips) {
+        if (!key.startsWith(routeId + '|')) continue;
+        const sid = feed.tripSvc.get(tripId);
+        const start = feed.tripStart.get(tripId);
+        if (!sid || !start || !feed.svcMasks.has(sid)) continue;
+        let pi = keyToIdx.get(key);
+        if (pi === undefined) pi = out.findIndex((o) => o.d === +key.split('|')[1]);
+        if (pi < 0) continue;
+        if (!svcIdx.has(sid)) svcIdx.set(sid, svcIdx.size);
+        const si = svcIdx.get(sid);
+        if (!byPat[pi].has(si)) byPat[pi].set(si, []);
+        byPat[pi].get(si).push(Math.round(start[1] / 60));
+      }
+      out.forEach((o, pi) => {
+        o.t = [...byPat[pi]].map(([si, mins]) => {
+          mins.sort((a, b) => a - b);
+          return [si, ...mins.map((m, i) => (i ? m - mins[i - 1] : m))];
+        });
+      });
+      const lineJson = JSON.stringify({ id: P + routeId, patterns: out, cal: { base: CAL.base, svc: [...svcIdx.keys()].map((sid) => feed.svcMasks.get(sid)) } });
+      const lineName = `${P.replace(':', '_')}${routeId.replace(/[^\w.-]/g, '_')}.json`;
+      writeFileSync(join(OUT, 'lines', lineName), lineJson);
+      fileHashes[lineName] = shortHash(lineJson);
 
       if (feed.op === 'amb') {
         // mapear cada trip_id (sin el último segmento) a su patrón
@@ -427,11 +546,14 @@ async function main() {
     ambPatterns,
     // estaciones de metro/funicular de TMB como lugares buscables
     places: [...new Map(tmb.stations.map((p) => [p[0], p])).values()],
+    files: fileHashes,
   };
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'network.json'), JSON.stringify(index));
   // la app consulta este fichero diminuto para saber si hay una red más nueva que la suya
-  writeFileSync(join(OUT, 'version.json'), JSON.stringify({ generated: index.generated, lines: lines.length, stops: stopList.length }));
+  // huella del contenido (sin la fecha): si no cambia, las apps no descargan nada
+  const { generated: _g, ...content } = index;
+  writeFileSync(join(OUT, 'version.json'), JSON.stringify({ generated: index.generated, hash: shortHash(JSON.stringify(content)), lines: lines.length, stops: stopList.length }));
   console.log(`Líneas: ${lines.length}. network.json: ${Math.round(JSON.stringify(index).length / 1024)} KB`);
 }
 
