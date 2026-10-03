@@ -1,7 +1,8 @@
 {
-  "version": "1.8.2",
-  "notes": "Ajustes muestra la fecha de la red y que las actualizaciones automáticas están activas.",
+  "version": "1.8.3",
+  "notes": "Las actualizaciones automáticas comprueban la integridad del paquete (SHA-256) antes de instalarse.",
   "native": 1,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.2/busbcn-web-1.8.2.zip",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.2/BusBCN-v1.8.2.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.3/busbcn-web-1.8.3.zip",
+  "checksum": "b666d3affa848f4056620d01995d792392d73378f6d0dbff569093695c5bd4a3",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.8.3/BusBCN-v1.8.3.apk"
 }

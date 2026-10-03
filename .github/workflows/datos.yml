@@ -53,7 +53,7 @@ jobs:
 
       - name: Versión de la app y página de inicio
         run: |
-          node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('site/data/version.json'));const a=fs.existsSync('app.json')?JSON.parse(fs.readFileSync('app.json')):{};Object.assign(v,{app:a.version,appNotes:a.notes,native:a.native,bundle:a.bundle,apk:a.apk});fs.writeFileSync('site/data/version.json',JSON.stringify(v))"
+          node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('site/data/version.json'));const a=fs.existsSync('app.json')?JSON.parse(fs.readFileSync('app.json')):{};Object.assign(v,{app:a.version,appNotes:a.notes,native:a.native,bundle:a.bundle,checksum:a.checksum,apk:a.apk});fs.writeFileSync('site/data/version.json',JSON.stringify(v))"
           cp site/data/version.json site/version.json
           echo '<!doctype html><meta charset="utf-8"><title>BusBCN datos</title><p>Datos de la red de BusBCN. Versión: <a href="data/version.json">data/version.json</a></p>' > site/index.html
 
