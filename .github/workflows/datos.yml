@@ -1,0 +1,65 @@
+# Regenera cada noche la red de autobuses de BusBCN (paradas, líneas y recorridos)
+# a partir de los GTFS oficiales de TMB y AMB y la publica en GitHub Pages.
+# La app comprueba al abrirse si hay una versión nueva y la descarga sola.
+name: Actualizar red de BusBCN
+
+on:
+  schedule:
+    - cron: '30 3 * * *' # cada día a las 03:30 UTC (05:30 en Barcelona en verano)
+  workflow_dispatch: {} # y a mano desde la pestaña Actions
+  push:
+    paths: ['app.json'] # al publicar una versión nueva de la app
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: datos
+  cancel-in-progress: false
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Generar la red desde los GTFS oficiales
+        env:
+          TMB_APP_ID: ${{ secrets.TMB_APP_ID }}
+          TMB_APP_KEY: ${{ secrets.TMB_APP_KEY }}
+          OUT_DIR: site/data
+          CACHE_DIR: cache
+        run: node scripts/build-data.mjs --fresh
+
+      - name: Guardar la caché de recorridos ajustados a calles
+        run: |
+          git config user.name "busbcn-bot"
+          git config user.email "busbcn-bot@users.noreply.github.com"
+          git add cache/matched
+          if git diff --cached --quiet; then echo "Sin recorridos nuevos"; else git commit -m "Caché de recorridos $(date -u +%F)" && (git pull --rebase && git push || echo "No se pudo guardar la caché; se reintentará"); fi
+
+      - name: Versión de la app y página de inicio
+        run: |
+          node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('site/data/version.json'));const a=fs.existsSync('app.json')?JSON.parse(fs.readFileSync('app.json')):{};Object.assign(v,{app:a.version,appNotes:a.notes});fs.writeFileSync('site/data/version.json',JSON.stringify(v))"
+          cp site/data/version.json site/version.json
+          echo '<!doctype html><meta charset="utf-8"><title>BusBCN datos</title><p>Datos de la red de BusBCN. Versión: <a href="data/version.json">data/version.json</a></p>' > site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

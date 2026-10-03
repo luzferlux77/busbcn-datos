@@ -1,0 +1,9 @@
+{
+  "name": "busbcn-datos",
+  "private": true,
+  "type": "module",
+  "description": "Generador nocturno de la red de autobuses de BusBCN (TMB + AMB)",
+  "dependencies": {
+    "fflate": "^0.8.3"
+  }
+}
