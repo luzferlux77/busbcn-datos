@@ -1,8 +1,8 @@
 {
-  "version": "1.10.0",
-  "notes": "Mapa nuevo: vectorial, limpio y nítido, con modo oscuro de verdad, zoom fluido y la red de paradas visible desde más lejos. La pantalla de línea muestra también los buses que van por variantes o desvíos. En el ordenador, acceso directo «BusBCN» que abre la web local en el navegador, sin instalar nada.",
+  "version": "1.10.1",
+  "notes": "Seguimiento del bus: el tramo hasta tu parada siempre sigue la calle (antes a veces salía una línea recta); el bus ya no adelanta tu parada en el mapa por el retraso de los datos; y en líneas que pasan dos veces por la misma parada se elige la pasada correcta.",
   "native": 1,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.0/busbcn-web-1.10.0.zip",
-  "checksum": "f4aedc8d2a22b874ba4d5a581f5d3f328d4e6213e5fc6ea231e5fc4d42b7a320",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.0/BusBCN-v1.10.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.1/busbcn-web-1.10.1.zip",
+  "checksum": "2b550dc9e29f136cb76db184b9f59e92f2f541c64bfaf2c114214dfe930ac0fc",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.1/BusBCN-v1.10.1.apk"
 }
