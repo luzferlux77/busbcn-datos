@@ -1,8 +1,8 @@
 {
-  "version": "2.2.0",
-  "notes": "Más tiempo real: TRAM en directo (hora real, retraso, ocupación y cada tranvía en el mapa), todos los trenes de Rodalies situados con su retraso real, FGC con sus horas reales y sin los trenes suprimidos, y el horario solo donde no hay datos en directo.",
+  "version": "2.3.0",
+  "notes": "FGC en tiempo real: pantalla oficial del andén en directo en las estaciones que la tienen, y horas de paso calculadas con el GPS de cada tren (su viaje exacto y su retraso real).",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.2.0/busbcn-web-2.2.0.zip",
-  "checksum": "6cd479e8a6a7acf74488f88d978414ebb498c34ea3f6a409587517e17c6d4936",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.2.0/BusMet-v2.2.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.0/busbcn-web-2.3.0.zip",
+  "checksum": "3f460867cf843857b94031a4d216f84df7034752d50c8b133ab142c28e5e7a39",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.0/BusMet-v2.3.0.apk"
 }
