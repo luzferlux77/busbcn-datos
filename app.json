@@ -1,8 +1,8 @@
 {
-  "version": "2.1.0",
-  "notes": "Rodalies y FGC del área metropolitana: estaciones con símbolo propio (R roja, F naranja; las compartidas agrupadas), salidas de Rodalies en directo con retraso y vía, y horarios de FGC. Trenes moviéndose por todo el mapa: metro en directo, Rodalies con GPS y TRAM/FGC según horario.",
+  "version": "2.1.1",
+  "notes": "Toca cualquier hora de llegada y el mapa te lleva a ese tren, metro, tranvía o bus. Trenes con morro que marca el sentido de la marcha. Arreglado el error de Rodalies en la web del ordenador y la posición de algunos trenes de metro.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.0/busbcn-web-2.1.0.zip",
-  "checksum": "da35c0aa2678c98694b6ccbc29926099c293cb099a98f878d2200b01fa3c9e3b",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.0/BusMet-v2.1.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.1/busbcn-web-2.1.1.zip",
+  "checksum": "e87bbdbd67caead4960ae4f83a698b22b1922d94b467aa024b3398d70a730212",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.1/BusMet-v2.1.1.apk"
 }
