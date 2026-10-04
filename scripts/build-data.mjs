@@ -12,6 +12,11 @@ const CACHE = process.env.CACHE_DIR || join(import.meta.dirname, '..', '.cache')
 
 const AMB_GTFS = 'https://www.ambmobilitat.cat/OpenData/google_transit.zip';
 const TRAM_GTFS = ['https://opendata.tram.cat/GTFS/zip/TBX.zip', 'https://opendata.tram.cat/GTFS/zip/TBS.zip']; // Trambaix y Trambesòs
+// Rodalies (núcleo 51 del GTFS de Cercanías de Renfe) y FGC; si la web oficial falla, espejo de Mobility Database
+const RENFE_GTFS = ['https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip', 'https://files.mobilitydatabase.org/mdb-2653/latest.zip'];
+const FGC_GTFS = ['https://www.fgc.cat/google/google_transit.zip', 'https://files.mobilitydatabase.org/mdb-1856/latest.zip'];
+// área metropolitana (de Garraf a Mataró, de Martorell/Terrassa/Sabadell/Granollers al mar)
+const METRO_AREA = [41.24, 1.86, 41.66, 2.47];
 const TMB_GTFS = process.env.TMB_APP_ID
   ? `https://api.tmb.cat/v1/static/datasets/gtfs.zip?app_id=${process.env.TMB_APP_ID}&app_key=${process.env.TMB_APP_KEY}`
   : 'https://files.mobilitydatabase.org/mdb-2359/latest.zip';
@@ -20,12 +25,23 @@ async function download(url, name) {
   mkdirSync(CACHE, { recursive: true });
   const file = join(CACHE, name);
   if (existsSync(file) && !process.argv.includes('--fresh')) return readFileSync(file);
-  console.log('Descargando', url.replace(/app_key=[^&]+/, 'app_key=***'));
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url} -> ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  writeFileSync(file, buf);
-  return buf;
+  const urls = Array.isArray(url) ? url : [url];
+  let err;
+  for (const u of urls) {
+    console.log('Descargando', u.replace(/app_key=[^&]+/, 'app_key=***'));
+    try {
+      const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (BusMet; datos abiertos)' } });
+      if (!res.ok) throw new Error(`${u} -> ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${u} -> no es un zip`);
+      writeFileSync(file, buf);
+      return buf;
+    } catch (e) {
+      err = e;
+      console.warn('  ', e.message);
+    }
+  }
+  throw err;
 }
 
 // CSV con comillas (RFC 4180 simplificado, sin saltos de línea dentro de campos)
@@ -45,7 +61,8 @@ function parseLine(line) {
   return out;
 }
 
-function* rows(zip, name) {
+/** filas de un fichero del GTFS; `pre` descarta líneas sin analizarlas (ficheros enormes como el de Renfe) */
+function* rows(zip, name, pre) {
   const raw = zip[name];
   if (!raw) return;
   const text = strFromU8(raw).replace(/^﻿/, '');
@@ -56,6 +73,7 @@ function* rows(zip, name) {
     const line = text.slice(start, end).replace(/\r$/, '');
     start = end + 1;
     if (!line) continue;
+    if (header && pre && !pre(line)) continue;
     const cols = parseLine(line);
     if (!header) { header = cols.map((h) => h.trim()); continue; }
     const o = {};
@@ -301,16 +319,30 @@ const BUS_TYPES = new Set(['3', '700']);
  * - bus: paradas por código público (se fusionan TMB y AMB);
  * - metro / tranvía: los andenes se agrupan en su estación (clave con prefijo para no chocar con el bus).
  */
+/**
+ * Opciones de trenes (Rodalies, FGC):
+ * - groupShort: una línea por nombre corto (Renfe publica una ruta por sentido y variante);
+ * - bbox: solo las estaciones del área metropolitana (los recorridos se recortan);
+ * - sig: un patrón por secuencia de estaciones (semidirectos, trenes cortos…), con su cabecera real;
+ * - pre: filtros rápidos de líneas de trips.txt / stop_times.txt (el GTFS de Renfe es de toda España).
+ */
 function processFeed(zip, op, opt = {}) {
   const { mode = 'bus', P = op === 'tmb' ? 't:' : 'a:', types = BUS_TYPES, keyPrefix = '', bit = op === 'tmb' ? 1 : 2, match = mode === 'bus', defColor = op === 'tmb' ? 'D7282F' : 'FFAA00' } = opt;
+  const { routeFilter, groupShort = false, codeOf = (id) => id.replace(/^\D+/, ''), bbox, sig = false, pre = {} } = opt;
+  const inArea = (lat, lon) => !bbox || (lat >= bbox[0] && lat <= bbox[2] && lon >= bbox[1] && lon <= bbox[3]);
   const routes = new Map();
+  const canon = new Map(); // route_id -> id de la línea
   for (const r of rows(zip, 'routes.txt')) {
     if (!types.has(r.route_type)) continue;
-    routes.set(r.route_id, {
-      id: P + r.route_id,
+    if (routeFilter && !routeFilter(r)) continue;
+    const rid = groupShort ? r.route_short_name || r.route_id : r.route_id;
+    canon.set(r.route_id, rid);
+    if (routes.has(rid)) continue;
+    routes.set(rid, {
+      id: P + rid,
       op,
       short: r.route_short_name || r.route_id,
-      long: r.route_long_name || '',
+      long: (r.route_long_name || '').replace(/\s*-\s*/g, ' - ').replace(/\s{2,}/g, ' '),
       color: (r.route_color || defColor).toUpperCase(),
       mode: r.route_type === '7' ? 'funi' : mode,
       text: (r.route_text_color || 'FFFFFF').toUpperCase(),
@@ -330,10 +362,11 @@ function processFeed(zip, op, opt = {}) {
       const code = (s.stop_code || s.stop_id).replace(/^0+(?=\d)/, '');
       stopsById.set(s.stop_id, { code, name: s.stop_name, lat: +s.stop_lat, lon: +s.stop_lon });
     } else {
-      // andén → estación: «M» + código de la estación (metro), «T» + código (tranvía)
+      // andén → estación: «M» + código (metro), «T» (tranvía), «R» (Rodalies), «F» (FGC)
       const par = parents.get(s.parent_station) || s;
-      const code = keyPrefix + (par.stop_code || par.stop_id).replace(/^\D+/, '');
-      stopsById.set(s.stop_id, { code, name: par.stop_name, lat: +par.stop_lat, lon: +par.stop_lon, platform: s.stop_code || '' });
+      const code = keyPrefix + codeOf(par.stop_code || par.stop_id);
+      const lat = +par.stop_lat, lon = +par.stop_lon;
+      stopsById.set(s.stop_id, { code, name: par.stop_name, lat, lon, platform: s.stop_code || '', out: !inArea(lat, lon) });
     }
   }
 
@@ -342,13 +375,14 @@ function processFeed(zip, op, opt = {}) {
   const tripSvc = new Map(); // trip_id -> service_id
   const tripStart = new Map(); // trip_id -> [secuencia, segundos] de la primera parada
   const patternCount = new Map();
-  for (const t of rows(zip, 'trips.txt')) {
-    if (!routes.has(t.route_id)) continue;
+  for (const t of rows(zip, 'trips.txt', pre.trips)) {
+    const rid = canon.get(t.route_id);
+    if (rid === undefined) continue;
     if (trips.has(t.trip_id)) continue; // AMB duplica algunos trip_id con route_id compuestos
-    const key = `${t.route_id}|${t.direction_id || '0'}|${t.shape_id}|${t.trip_headsign}`;
+    const key = `${rid}|${t.direction_id || '0'}|${t.shape_id}|${t.trip_headsign}`;
     trips.set(t.trip_id, key);
     tripSvc.set(t.trip_id, t.service_id);
-    const pc = patternCount.get(key) || { n: 0, trip: t.trip_id, route: t.route_id, dir: +(t.direction_id || 0), shape: t.shape_id, head: t.trip_headsign };
+    const pc = patternCount.get(key) || { n: 0, trip: t.trip_id, route: rid, dir: +(t.direction_id || 0), shape: t.shape_id, head: t.trip_headsign };
     pc.n++;
     patternCount.set(key, pc);
   }
@@ -359,22 +393,61 @@ function processFeed(zip, op, opt = {}) {
 
   const stopRoutes = new Map(); // stop_id -> Set(route_id)
   const patternStops = new Map(); // key -> [stop_id...]
-  for (const st of rows(zip, 'stop_times.txt')) {
+  const tripAll = sig ? new Map() : null; // trip_id -> todas sus paradas (también fuera del área)
+  for (const st of rows(zip, 'stop_times.txt', pre.stop_times)) {
     const key = trips.get(st.trip_id);
     if (!key) continue;
+    const seq = +st.stop_sequence;
+    const secs = gtfsSecs(st.departure_time || st.arrival_time);
+    if (tripAll) {
+      let a = tripAll.get(st.trip_id);
+      if (!a) tripAll.set(st.trip_id, (a = []));
+      a.push([seq, st.stop_id, secs]);
+    }
+    if (stopsById.get(st.stop_id)?.out) continue; // fuera del área metropolitana
     const route = key.slice(0, key.indexOf('|'));
     let set = stopRoutes.get(st.stop_id);
     if (!set) stopRoutes.set(st.stop_id, (set = new Set()));
     set.add(route);
-    const seq = +st.stop_sequence;
-    const secs = gtfsSecs(st.departure_time || st.arrival_time);
     const first = tripStart.get(st.trip_id);
     if (secs >= 0 && (!first || seq < first[0])) tripStart.set(st.trip_id, [seq, secs]);
-    if (repTrips.get(st.trip_id) === key) {
+    if (!tripAll && repTrips.get(st.trip_id) === key) {
       let arr = patternStops.get(key);
       if (!arr) patternStops.set(key, (arr = []));
       arr.push([seq, st.stop_id, secs]);
     }
+  }
+
+  // trenes: un patrón por secuencia de estaciones dentro del área; cabecera = destino real del tren
+  if (tripAll) {
+    patternCount.clear();
+    patternStops.clear();
+    stopRoutes.clear();
+    for (const [tid, base] of [...trips]) {
+      const arr = (tripAll.get(tid) || []).sort((a, b) => a[0] - b[0]);
+      const inb = arr.filter(([, id]) => stopsById.has(id) && !stopsById.get(id).out);
+      if (inb.length < 2) {
+        trips.delete(tid);
+        continue;
+      }
+      const key = `${base}|${inb.map(([, id]) => stopsById.get(id).code).join(',')}`;
+      trips.set(tid, key);
+      let pc = patternCount.get(key);
+      if (!pc) {
+        const [route, dir, shape, head] = base.split('|');
+        pc = { n: 0, trip: tid, route, dir: +dir, shape, head: head || stopsById.get(arr.at(-1)[1])?.name || '' };
+        patternCount.set(key, pc);
+        patternStops.set(key, inb);
+      }
+      pc.n++;
+      for (const [, id] of inb) {
+        if (!stopRoutes.has(id)) stopRoutes.set(id, new Set());
+        stopRoutes.get(id).add(pc.route);
+      }
+    }
+    // líneas que no llegan al área (p. ej. la R3 de Vic a Puigcerdà)
+    const used = new Set([...patternCount.values()].map((pc) => pc.route));
+    for (const rid of [...routes.keys()]) if (!used.has(rid)) routes.delete(rid);
   }
 
   const shapes = new Map();
@@ -391,15 +464,28 @@ function processFeed(zip, op, opt = {}) {
       const seq = (patternStops.get(key) || []).sort((a, b) => a[0] - b[0]);
       const last = stopsById.get(seq.at(-1)?.[1]);
       if (!pc.head && last) pc.head = last.name;
+      pc.seq = seq.map(([, id]) => stopsById.get(id)).filter(Boolean);
       if (!byRoute.has(pc.route)) byRoute.set(pc.route, []);
       byRoute.get(pc.route).push(pc);
     }
     for (const pcs of byRoute.values()) {
       if (pcs.some((p) => p.dir)) continue; // ya trae sentido (metro TMB)
-      const heads = new Map();
-      for (const p of pcs) heads.set(p.head, (heads.get(p.head) || 0) + p.n);
-      const [h0] = [...heads].sort((a, b) => b[1] - a[1])[0] ?? [];
-      for (const p of pcs) p.dir = p.head === h0 ? 0 : 1;
+      // sentido según el orden de las estaciones respecto al recorrido más frecuente
+      // (con varios destinos —trenes cortos, ramales— no basta con mirar la cabecera)
+      const ref = pcs.reduce((a, b) => (b.n > a.n ? b : a));
+      const pos = new Map(ref.seq.map((s, i) => [s.code, i]));
+      const vec = (q) => (q.length > 1 ? [q.at(-1).lat - q[0].lat, q.at(-1).lon - q[0].lon] : [0, 0]);
+      const rv = vec(ref.seq);
+      for (const p of pcs) {
+        const idx = p.seq.map((s) => pos.get(s.code)).filter((x) => x !== undefined);
+        let up = 0, down = 0;
+        for (let i = 1; i < idx.length; i++) {
+          if (idx[i] > idx[i - 1]) up++;
+          else if (idx[i] < idx[i - 1]) down++;
+        }
+        const pv = vec(p.seq);
+        p.dir = up !== down ? (up > down ? 0 : 1) : pv[0] * rv[0] + pv[1] * rv[1] >= 0 ? 0 : 1;
+      }
     }
   }
   // frecuencias (algunas líneas de metro): salidas cada X segundos entre dos horas
@@ -408,13 +494,42 @@ function processFeed(zip, op, opt = {}) {
     if (!freq.has(r.trip_id)) freq.set(r.trip_id, []);
     freq.get(r.trip_id).push([gtfsSecs(r.start_time), gtfsSecs(r.end_time), +r.headway_secs]);
   }
-  return { op, mode, P, bit, match, stations, routes, stopsById, trips, tripSvc, tripStart, freq, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
+  return { op, mode, P, bit, match, sig, bbox, stations, routes, stopsById, trips, tripSvc, tripStart, freq, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
 }
 
 const CAL = calendarWindow();
 
+/**
+ * Recorta la vía de un tren entre su primera y su última estación (dentro del área) y la orienta
+ * en el sentido de la marcha (Renfe usa a veces la misma vía para los dos sentidos).
+ * null si la vía publicada no pasa cerca de las estaciones.
+ */
+function clipShape(pts, stopPts) {
+  const near = (p, from = 0) => {
+    let bi = from, bd = Infinity;
+    for (let i = from; i < pts.length; i++) {
+      const d = dist(pts[i], p);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return bi;
+  };
+  const a = stopPts[0], b = stopPts.at(-1);
+  if (near(b) < near(a)) pts = pts.slice().reverse();
+  const ia = near(a), ib = near(b, ia);
+  if (ib - ia < 1) return null;
+  const out = pts.slice(ia, ib + 1);
+  if (stopPts.some((p) => distToLine(p, out) > 400)) return null;
+  return out;
+}
+
 async function main() {
-  const [ambZip, tmbZip, ...tramZips] = await Promise.all([download(AMB_GTFS, 'amb.zip'), download(TMB_GTFS, 'tmb.zip'), ...TRAM_GTFS.map((u, i) => download(u, `tram${i}.zip`))]);
+  const [ambZip, tmbZip, renfeZip, fgcZip, ...tramZips] = await Promise.all([
+    download(AMB_GTFS, 'amb.zip'),
+    download(TMB_GTFS, 'tmb.zip'),
+    download(RENFE_GTFS, 'renfe.zip'),
+    download(FGC_GTFS, 'fgc.zip'),
+    ...TRAM_GTFS.map((u, i) => download(u, `tram${i}.zip`)),
+  ]);
   console.log('Procesando TMB…');
   const tmbZ = unzipSync(new Uint8Array(tmbZip));
   const tmb = processFeed(tmbZ, 'tmb');
@@ -424,7 +539,20 @@ async function main() {
   const amb = processFeed(unzipSync(new Uint8Array(ambZip)), 'amb');
   console.log('Procesando TRAM…');
   const trams = tramZips.map((z, i) => processFeed(unzipSync(new Uint8Array(z)), 'tram', { mode: 'tram', P: `r${i}:`, types: new Set(['0', '2', '900']), keyPrefix: 'T', bit: 8, defColor: '008080' }));
-  const FEEDS = [tmb, amb, metro, ...trams];
+  console.log('Procesando Rodalies…');
+  const GTFS_FILES = /^(agency|routes|trips|stops|stop_times|calendar|calendar_dates|shapes|frequencies).txt$/;
+  const rodalies = processFeed(unzipSync(new Uint8Array(renfeZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'renfe', {
+    mode: 'rodalies', P: 'rod:', types: new Set(['2']), keyPrefix: 'R', bit: 16, defColor: 'E2231A', match: false,
+    routeFilter: (r) => r.route_id.startsWith('51T'), // núcleo 51 = Rodalies de Catalunya
+    groupShort: true, codeOf: (id) => id.replace(/^0+(?=d)/, ''), bbox: METRO_AREA, sig: true,
+    pre: { trips: (l) => l.startsWith('51T'), stop_times: (l) => l.startsWith('51') },
+  });
+  console.log('Procesando FGC…');
+  const fgc = processFeed(unzipSync(new Uint8Array(fgcZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'fgc', {
+    mode: 'fgc', P: 'fgc:', types: new Set(['1', '2', '7']), keyPrefix: 'F', bit: 32, defColor: 'F26F21', match: false,
+    codeOf: (id) => id, bbox: METRO_AREA, sig: true,
+  });
+  const FEEDS = [tmb, amb, metro, ...trams, rodalies, fgc];
 
   // --- Líneas ---
   const lines = [];
@@ -439,13 +567,24 @@ async function main() {
   // --- Paradas unificadas por código público ---
   const stops = new Map(); // key -> {code, name, lat, lon, ops, lines:Set}
   const ambStopKey = {}; // stop_id AMB -> clave unificada (solo si difiere del número)
+  const stationAlias = {}; // estación FGC -> estación de Rodalies con la que se agrupa
   let merged = 0, conflicts = 0;
   for (const feed of FEEDS) {
     const P = feed.P;
     for (const [stopId, s] of feed.stopsById) {
       const rs = feed.stopRoutes.get(stopId);
-      if (!rs || !rs.size) continue; // parada sin servicio
-      let key = s.code;
+      if (!rs || !rs.size || s.out) continue; // parada sin servicio o fuera del área
+      let key = stationAlias[s.code] ?? s.code;
+      // estación compartida de Rodalies y FGC (Pl. Catalunya, Terrassa Nord, Sabadell Nord…): una sola parada
+      if (feed.op === 'fgc' && !stationAlias[s.code] && !stops.has(key)) {
+        let twin = null, best = 300;
+        for (const st of stops.values()) {
+          if (!(st.ops & 16)) continue;
+          const d = dist([st.lat, st.lon], [s.lat, s.lon]);
+          if (d < best) { best = d; twin = st; }
+        }
+        if (twin) key = stationAlias[s.code] = twin.code;
+      }
       const prev = stops.get(key);
       if (feed.mode === 'bus' && prev && prev.ops !== feed.bit) {
         if (dist([prev.lat, prev.lon], [s.lat, s.lon]) > 150) { key = `${feed.op}-${s.code}`; conflicts++; }
@@ -459,12 +598,13 @@ async function main() {
       if (feed.op === 'amb' && String(+stopId) !== key) ambStopKey[stopId] = key;
     }
   }
-  console.log(`Paradas: ${stops.size} (fusionadas TMB+AMB: ${merged}, conflictos de código: ${conflicts})`);
+  console.log(`Paradas: ${stops.size} (fusionadas TMB+AMB: ${merged}, conflictos de código: ${conflicts}; estaciones Rodalies+FGC: ${Object.keys(stationAlias).length})`);
 
   const stopIdToKey = (feed, id) => {
     const s = feed.stopsById.get(id);
     if (!s) return null;
     if (feed.op === 'amb' && ambStopKey[id]) return ambStopKey[id];
+    if (stationAlias[s.code]) return stationAlias[s.code];
     if (stops.has(s.code)) return s.code;
     if (feed.mode !== 'bus') return null;
     return stops.has(`${feed.op}-${s.code}`) ? `${feed.op}-${s.code}` : null;
@@ -494,7 +634,7 @@ async function main() {
       const keyToIdx = new Map();
       for (const p of pats) {
         const isMain = !out.some((o) => o.d === p.dir);
-        if (!isMain && p.n / totalByDir[p.dir] < 0.05) continue;
+        if (!isMain && !feed.sig && p.n / totalByDir[p.dir] < 0.05) continue;
         const seq = (feed.patternStops.get(p.key) || []).sort((a, b) => a[0] - b[0]);
         const withKeys = seq.map(([, id, secs]) => [stopIdToKey(feed, id), secs]).filter(([k]) => k);
         const stopKeys = withKeys.map(([k]) => k);
@@ -523,6 +663,7 @@ async function main() {
         if (sh) {
           sh.sort((a, b) => a[0] - b[0]);
           let pts = sh.map(([, la, lo]) => [la, lo]);
+          if (feed.sig) pts = clipShape(pts, stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon])) ?? stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]);
           if (feed.match && needsMatching(pts)) {
             const matched = await matchToStreets(`${feed.op}_${p.shape}`, pts, stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
             if (matched) { pts = matched; matchStats.ok++; } else matchStats.kept++;
@@ -537,7 +678,15 @@ async function main() {
       }
       const li = lineIdx.get(P + routeId);
       lines[li].heads = out.map((o) => o.h);
-      if (feed.mode !== 'bus') for (const o of out.filter((x) => x.m)) rail.push([li, o.p]);
+      if (feed.mode !== 'bus') {
+        // red completa: recorridos principales y, en los trenes, también los ramales con estaciones propias
+        const covered = new Set();
+        for (const o of [...out.filter((x) => x.m), ...out.filter((x) => !x.m)]) {
+          if (!o.m && (!feed.sig || o.s.every((k) => covered.has(k)))) continue;
+          rail.push([li, o.p]);
+          o.s.forEach((k) => covered.add(k));
+        }
+      }
       // horarios: salidas de cada viaje agrupadas por servicio (minutos, en diferencias) y días activos
       const svcIdx = new Map();
       const byPat = out.map(() => new Map());
@@ -600,6 +749,7 @@ async function main() {
     stops: stopList,
     ambStopKey,
     ambPatterns,
+    stationAlias,
     // estaciones de metro/funicular de TMB como lugares buscables
     places: [], // las estaciones de metro ya son paradas buscables
     files: fileHashes,

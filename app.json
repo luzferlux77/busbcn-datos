@@ -1,8 +1,8 @@
 {
-  "version": "2.0.1",
-  "notes": "En el mapa, las estaciones de metro son rombos y las del TRAM cuadrados (el bus sigue en puntos redondos), para distinguirlas con todas las capas a la vista.",
+  "version": "2.1.0",
+  "notes": "Rodalies y FGC del área metropolitana: estaciones con símbolo propio (R roja, F naranja; las compartidas agrupadas), salidas de Rodalies en directo con retraso y vía, y horarios de FGC. Trenes moviéndose por todo el mapa: metro en directo, Rodalies con GPS y TRAM/FGC según horario.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.1/busbcn-web-2.0.1.zip",
-  "checksum": "1524a54ed1a5d3286801361e7f9a7ee680dfeb43c59b11ddc3ec6a4bc2029556",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.1/BusMet-v2.0.1.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.0/busbcn-web-2.1.0.zip",
+  "checksum": "da35c0aa2678c98694b6ccbc29926099c293cb099a98f878d2200b01fa3c9e3b",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.0/BusMet-v2.1.0.apk"
 }
