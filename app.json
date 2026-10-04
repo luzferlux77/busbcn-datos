@@ -1,8 +1,8 @@
 {
-  "version": "2.1.3",
-  "notes": "Los botones de capas del mapa muestran el logo de cada transporte: bus, metro, TRAM, Rodalies y FGC.",
+  "version": "2.2.0",
+  "notes": "Más tiempo real: TRAM en directo (hora real, retraso, ocupación y cada tranvía en el mapa), todos los trenes de Rodalies situados con su retraso real, FGC con sus horas reales y sin los trenes suprimidos, y el horario solo donde no hay datos en directo.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.3/busbcn-web-2.1.3.zip",
-  "checksum": "bf0c1544b4462aadcd9695d17ccded08b96a2a8c28b73bb1365aaa76bf0fe1b5",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.3/BusMet-v2.1.3.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.2.0/busbcn-web-2.2.0.zip",
+  "checksum": "6cd479e8a6a7acf74488f88d978414ebb498c34ea3f6a409587517e17c6d4936",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.2.0/BusMet-v2.2.0.apk"
 }

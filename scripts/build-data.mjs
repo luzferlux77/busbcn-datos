@@ -328,7 +328,7 @@ const BUS_TYPES = new Set(['3', '700']);
  */
 function processFeed(zip, op, opt = {}) {
   const { mode = 'bus', P = op === 'tmb' ? 't:' : 'a:', types = BUS_TYPES, keyPrefix = '', bit = op === 'tmb' ? 1 : 2, match = mode === 'bus', defColor = op === 'tmb' ? 'D7282F' : 'FFAA00' } = opt;
-  const { routeFilter, groupShort = false, codeOf = (id) => id.replace(/^\D+/, ''), bbox, sig = false, pre = {} } = opt;
+  const { routeFilter, groupShort = false, codeOf = (id) => id.replace(/^\D+/, ''), bbox, sig = false, pre = {}, tripIds = false } = opt;
   const inArea = (lat, lon) => !bbox || (lat >= bbox[0] && lat <= bbox[2] && lon >= bbox[1] && lon <= bbox[3]);
   const routes = new Map();
   const canon = new Map(); // route_id -> id de la línea
@@ -494,7 +494,7 @@ function processFeed(zip, op, opt = {}) {
     if (!freq.has(r.trip_id)) freq.set(r.trip_id, []);
     freq.get(r.trip_id).push([gtfsSecs(r.start_time), gtfsSecs(r.end_time), +r.headway_secs]);
   }
-  return { op, mode, P, bit, match, sig, bbox, stations, routes, stopsById, trips, tripSvc, tripStart, freq, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
+  return { op, mode, P, bit, match, sig, bbox, tripIds, stations, routes, stopsById, trips, tripSvc, tripStart, freq, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
 }
 
 const CAL = calendarWindow();
@@ -550,7 +550,7 @@ async function main() {
   console.log('Procesando FGC…');
   const fgc = processFeed(unzipSync(new Uint8Array(fgcZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'fgc', {
     mode: 'fgc', P: 'fgc:', types: new Set(['1', '2', '7']), keyPrefix: 'F', bit: 32, defColor: 'F26F21', match: false,
-    codeOf: (id) => id, bbox: METRO_AREA, sig: true,
+    codeOf: (id) => id, bbox: METRO_AREA, sig: true, tripIds: true,
   });
   const FEEDS = [tmb, amb, metro, ...trams, rodalies, fgc];
 
@@ -702,14 +702,14 @@ async function main() {
         const si = svcIdx.get(sid);
         if (!byPat[pi].has(si)) byPat[pi].set(si, []);
         const fq = feed.freq.get(tripId);
-        if (fq) for (const [a, b, h] of fq) for (let t = a; t < b && h > 0; t += h) byPat[pi].get(si).push(Math.round(t / 60));
-        else byPat[pi].get(si).push(Math.round(start[1] / 60));
+        if (fq) for (const [a, b, h] of fq) for (let t = a; t < b && h > 0; t += h) byPat[pi].get(si).push([Math.round(t / 60), '']);
+        else byPat[pi].get(si).push([Math.round(start[1] / 60), tripId]);
       }
       out.forEach((o, pi) => {
-        o.t = [...byPat[pi]].map(([si, mins]) => {
-          mins.sort((a, b) => a - b);
-          return [si, ...mins.map((m, i) => (i ? m - mins[i - 1] : m))];
-        });
+        const groups = [...byPat[pi]].map(([si, trips]) => [si, trips.sort((a, b) => a[0] - b[0])]);
+        o.t = groups.map(([si, trips]) => [si, ...trips.map(([m], i) => (i ? m - trips[i - 1][0] : m))]);
+        // FGC: identificador de cada viaje (última parte del trip_id), para quitar los cancelados en tiempo real
+        if (feed.tripIds) o.ti = groups.map(([, trips]) => trips.map(([, id]) => id.split('|').pop()));
       });
       const lineJson = JSON.stringify({ id: P + routeId, patterns: out, cal: { base: CAL.base, svc: [...svcIdx.keys()].map((sid) => feed.svcMasks.get(sid)) } });
       const lineName = `${P.replace(':', '_')}${routeId.replace(/[^\w.-]/g, '_')}.json`;
