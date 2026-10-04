@@ -1,8 +1,8 @@
 {
-  "version": "1.10.1",
-  "notes": "Seguimiento del bus: el tramo hasta tu parada siempre sigue la calle (antes a veces salía una línea recta); el bus ya no adelanta tu parada en el mapa por el retraso de los datos; y en líneas que pasan dos veces por la misma parada se elige la pasada correcta.",
-  "native": 1,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.1/busbcn-web-1.10.1.zip",
-  "checksum": "2b550dc9e29f136cb76db184b9f59e92f2f541c64bfaf2c114214dfe930ac0fc",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v1.10.1/BusBCN-v1.10.1.apk"
+  "version": "2.0.0",
+  "notes": "Ahora se llama BusMet. Metro (con tiempos en directo) y TRAM (con horarios): estaciones con todas sus líneas, red completa en el mapa con los colores de cada línea y botones para mostrar u ocultar Bus, Metro y TRAM.",
+  "native": 2,
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.0/busbcn-web-2.0.0.zip",
+  "checksum": "c4fbaf22d3cb40fd6c9618da767e2d59b236abf322b82c00d4ffb644b206d233",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.0/BusMet-v2.0.0.apk"
 }

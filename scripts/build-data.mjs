@@ -11,6 +11,7 @@ const OUT = process.env.OUT_DIR || join(import.meta.dirname, '..', 'public', 'da
 const CACHE = process.env.CACHE_DIR || join(import.meta.dirname, '..', '.cache');
 
 const AMB_GTFS = 'https://www.ambmobilitat.cat/OpenData/google_transit.zip';
+const TRAM_GTFS = ['https://opendata.tram.cat/GTFS/zip/TBX.zip', 'https://opendata.tram.cat/GTFS/zip/TBS.zip']; // Trambaix y Trambesòs
 const TMB_GTFS = process.env.TMB_APP_ID
   ? `https://api.tmb.cat/v1/static/datasets/gtfs.zip?app_id=${process.env.TMB_APP_ID}&app_key=${process.env.TMB_APP_KEY}`
   : 'https://files.mobilitydatabase.org/mdb-2359/latest.zip';
@@ -293,21 +294,25 @@ function dist(a, b) {
 
 const r5 = (n) => Math.round(n * 1e5) / 1e5;
 
+const BUS_TYPES = new Set(['3', '700']);
+
 /**
- * Procesa un GTFS y devuelve líneas de bus, paradas (por código público) y patrones.
- * op: 'tmb' | 'amb'
+ * Procesa un GTFS y devuelve líneas, paradas y patrones de un modo de transporte.
+ * - bus: paradas por código público (se fusionan TMB y AMB);
+ * - metro / tranvía: los andenes se agrupan en su estación (clave con prefijo para no chocar con el bus).
  */
-function processFeed(zip, op) {
-  const P = op === 'tmb' ? 't:' : 'a:';
+function processFeed(zip, op, opt = {}) {
+  const { mode = 'bus', P = op === 'tmb' ? 't:' : 'a:', types = BUS_TYPES, keyPrefix = '', bit = op === 'tmb' ? 1 : 2, match = mode === 'bus', defColor = op === 'tmb' ? 'D7282F' : 'FFAA00' } = opt;
   const routes = new Map();
   for (const r of rows(zip, 'routes.txt')) {
-    if (r.route_type !== '3' && r.route_type !== '700') continue; // solo autobús
+    if (!types.has(r.route_type)) continue;
     routes.set(r.route_id, {
       id: P + r.route_id,
       op,
       short: r.route_short_name || r.route_id,
       long: r.route_long_name || '',
-      color: (r.route_color || (op === 'tmb' ? 'D7282F' : 'FFAA00')).toUpperCase(),
+      color: (r.route_color || defColor).toUpperCase(),
+      mode: r.route_type === '7' ? 'funi' : mode,
       text: (r.route_text_color || 'FFFFFF').toUpperCase(),
       url: (r.route_url || '').trim(),
     });
@@ -315,11 +320,21 @@ function processFeed(zip, op) {
 
   const stopsById = new Map();
   const stations = [];
-  for (const s of rows(zip, 'stops.txt')) {
+  const parents = new Map();
+  const allStops = [...rows(zip, 'stops.txt')];
+  for (const s of allStops) if (s.location_type === '1') parents.set(s.stop_id, s);
+  for (const s of allStops) {
     if (s.location_type === '1') stations.push([s.stop_name, r5(+s.stop_lat), r5(+s.stop_lon)]);
     if (s.location_type && s.location_type !== '0') continue;
-    const code = (s.stop_code || s.stop_id).replace(/^0+(?=\d)/, '');
-    stopsById.set(s.stop_id, { code, name: s.stop_name, lat: +s.stop_lat, lon: +s.stop_lon });
+    if (mode === 'bus') {
+      const code = (s.stop_code || s.stop_id).replace(/^0+(?=\d)/, '');
+      stopsById.set(s.stop_id, { code, name: s.stop_name, lat: +s.stop_lat, lon: +s.stop_lon });
+    } else {
+      // andén → estación: «M» + código de la estación (metro), «T» + código (tranvía)
+      const par = parents.get(s.parent_station) || s;
+      const code = keyPrefix + (par.stop_code || par.stop_id).replace(/^\D+/, '');
+      stopsById.set(s.stop_id, { code, name: par.stop_name, lat: +par.stop_lat, lon: +par.stop_lon, platform: s.stop_code || '' });
+    }
   }
 
   // viajes: patrón = (ruta, sentido, shape, cabecera)
@@ -369,22 +384,52 @@ function processFeed(zip, op) {
     arr.push([+s.shape_pt_sequence, +s.shape_pt_lat, +s.shape_pt_lon]);
   }
 
-  return { op, stations, routes, stopsById, trips, tripSvc, tripStart, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
+  // el TRAM no publica sentido ni destino de los viajes: destino = última parada; sentido = según destino
+  if (mode !== 'bus') {
+    const byRoute = new Map();
+    for (const [key, pc] of patternCount) {
+      const seq = (patternStops.get(key) || []).sort((a, b) => a[0] - b[0]);
+      const last = stopsById.get(seq.at(-1)?.[1]);
+      if (!pc.head && last) pc.head = last.name;
+      if (!byRoute.has(pc.route)) byRoute.set(pc.route, []);
+      byRoute.get(pc.route).push(pc);
+    }
+    for (const pcs of byRoute.values()) {
+      if (pcs.some((p) => p.dir)) continue; // ya trae sentido (metro TMB)
+      const heads = new Map();
+      for (const p of pcs) heads.set(p.head, (heads.get(p.head) || 0) + p.n);
+      const [h0] = [...heads].sort((a, b) => b[1] - a[1])[0] ?? [];
+      for (const p of pcs) p.dir = p.head === h0 ? 0 : 1;
+    }
+  }
+  // frecuencias (algunas líneas de metro): salidas cada X segundos entre dos horas
+  const freq = new Map();
+  for (const r of rows(zip, 'frequencies.txt')) {
+    if (!freq.has(r.trip_id)) freq.set(r.trip_id, []);
+    freq.get(r.trip_id).push([gtfsSecs(r.start_time), gtfsSecs(r.end_time), +r.headway_secs]);
+  }
+  return { op, mode, P, bit, match, stations, routes, stopsById, trips, tripSvc, tripStart, freq, patternCount, patternStops, stopRoutes, shapes, svcMasks: serviceMasks(zip, CAL) };
 }
 
 const CAL = calendarWindow();
 
 async function main() {
-  const [ambZip, tmbZip] = await Promise.all([download(AMB_GTFS, 'amb.zip'), download(TMB_GTFS, 'tmb.zip')]);
+  const [ambZip, tmbZip, ...tramZips] = await Promise.all([download(AMB_GTFS, 'amb.zip'), download(TMB_GTFS, 'tmb.zip'), ...TRAM_GTFS.map((u, i) => download(u, `tram${i}.zip`))]);
   console.log('Procesando TMB…');
-  const tmb = processFeed(unzipSync(new Uint8Array(tmbZip)), 'tmb');
+  const tmbZ = unzipSync(new Uint8Array(tmbZip));
+  const tmb = processFeed(tmbZ, 'tmb');
+  console.log('Procesando metro…');
+  const metro = processFeed(tmbZ, 'tmb', { mode: 'metro', P: 'm:', types: new Set(['1', '7']), keyPrefix: 'M', bit: 4 });
   console.log('Procesando AMB…');
   const amb = processFeed(unzipSync(new Uint8Array(ambZip)), 'amb');
+  console.log('Procesando TRAM…');
+  const trams = tramZips.map((z, i) => processFeed(unzipSync(new Uint8Array(z)), 'tram', { mode: 'tram', P: `r${i}:`, types: new Set(['0', '2', '900']), keyPrefix: 'T', bit: 8, defColor: '008080' }));
+  const FEEDS = [tmb, amb, metro, ...trams];
 
   // --- Líneas ---
   const lines = [];
   const lineIdx = new Map();
-  for (const feed of [tmb, amb]) {
+  for (const feed of FEEDS) {
     for (const r of feed.routes.values()) {
       lineIdx.set(r.id, lines.length);
       lines.push(r);
@@ -395,20 +440,21 @@ async function main() {
   const stops = new Map(); // key -> {code, name, lat, lon, ops, lines:Set}
   const ambStopKey = {}; // stop_id AMB -> clave unificada (solo si difiere del número)
   let merged = 0, conflicts = 0;
-  for (const feed of [tmb, amb]) {
-    const P = feed.op === 'tmb' ? 't:' : 'a:';
+  for (const feed of FEEDS) {
+    const P = feed.P;
     for (const [stopId, s] of feed.stopsById) {
       const rs = feed.stopRoutes.get(stopId);
-      if (!rs || !rs.size) continue; // parada sin servicio de bus
+      if (!rs || !rs.size) continue; // parada sin servicio
       let key = s.code;
       const prev = stops.get(key);
-      if (prev && prev.ops !== (feed.op === 'tmb' ? 1 : 2)) {
+      if (feed.mode === 'bus' && prev && prev.ops !== feed.bit) {
         if (dist([prev.lat, prev.lon], [s.lat, s.lon]) > 150) { key = `${feed.op}-${s.code}`; conflicts++; }
-        else if (!(prev.ops & (feed.op === 'tmb' ? 1 : 2))) merged++;
+        else if (!(prev.ops & feed.bit)) merged++;
       }
       let st = stops.get(key);
-      if (!st) stops.set(key, (st = { code: key, name: s.name, lat: s.lat, lon: s.lon, ops: 0, lines: new Set() }));
-      st.ops |= feed.op === 'tmb' ? 1 : 2;
+      if (!st) stops.set(key, (st = { code: key, name: s.name, lat: s.lat, lon: s.lon, ops: 0, lines: new Set(), platforms: new Set() }));
+      st.ops |= feed.bit;
+      if (feed.mode === 'metro' && s.platform) st.platforms.add(+s.platform);
       for (const r of rs) st.lines.add(lineIdx.get(P + r));
       if (feed.op === 'amb' && String(+stopId) !== key) ambStopKey[stopId] = key;
     }
@@ -420,6 +466,7 @@ async function main() {
     if (!s) return null;
     if (feed.op === 'amb' && ambStopKey[id]) return ambStopKey[id];
     if (stops.has(s.code)) return s.code;
+    if (feed.mode !== 'bus') return null;
     return stops.has(`${feed.op}-${s.code}`) ? `${feed.op}-${s.code}` : null;
   };
 
@@ -429,8 +476,9 @@ async function main() {
   const ambPatterns = {}; // prefijo trip_id AMB (4 segmentos) -> [lineIdx, patternIdx]
   let shapeBytes = 0;
   const fileHashes = {}; // fichero de línea -> huella
-  for (const feed of [tmb, amb]) {
-    const P = feed.op === 'tmb' ? 't:' : 'a:';
+  const rail = []; // trazado de metro y tranvía para dibujar la red completa en el mapa
+  for (const feed of FEEDS) {
+    const P = feed.P;
     const byRoute = new Map();
     for (const [key, pc] of feed.patternCount) {
       if (!byRoute.has(pc.route)) byRoute.set(pc.route, []);
@@ -475,7 +523,7 @@ async function main() {
         if (sh) {
           sh.sort((a, b) => a[0] - b[0]);
           let pts = sh.map(([, la, lo]) => [la, lo]);
-          if (needsMatching(pts)) {
+          if (feed.match && needsMatching(pts)) {
             const matched = await matchToStreets(`${feed.op}_${p.shape}`, pts, stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
             if (matched) { pts = matched; matchStats.ok++; } else matchStats.kept++;
           }
@@ -489,6 +537,7 @@ async function main() {
       }
       const li = lineIdx.get(P + routeId);
       lines[li].heads = out.map((o) => o.h);
+      if (feed.mode !== 'bus') for (const o of out.filter((x) => x.m)) rail.push([li, o.p]);
       // horarios: salidas de cada viaje agrupadas por servicio (minutos, en diferencias) y días activos
       const svcIdx = new Map();
       const byPat = out.map(() => new Map());
@@ -503,7 +552,9 @@ async function main() {
         if (!svcIdx.has(sid)) svcIdx.set(sid, svcIdx.size);
         const si = svcIdx.get(sid);
         if (!byPat[pi].has(si)) byPat[pi].set(si, []);
-        byPat[pi].get(si).push(Math.round(start[1] / 60));
+        const fq = feed.freq.get(tripId);
+        if (fq) for (const [a, b, h] of fq) for (let t = a; t < b && h > 0; t += h) byPat[pi].get(si).push(Math.round(t / 60));
+        else byPat[pi].get(si).push(Math.round(start[1] / 60));
       }
       out.forEach((o, pi) => {
         o.t = [...byPat[pi]].map(([si, mins]) => {
@@ -516,7 +567,7 @@ async function main() {
       writeFileSync(join(OUT, 'lines', lineName), lineJson);
       fileHashes[lineName] = shortHash(lineJson);
 
-      if (feed.op === 'amb') {
+      if (feed.op === 'amb' && feed.mode === 'bus') {
         // mapear cada trip_id (sin el último segmento) a su patrón
         for (const [tripId, key] of feed.trips) {
           if (!key.startsWith(routeId + '|')) continue;
@@ -536,16 +587,21 @@ async function main() {
   console.log(`Recorridos: ${Math.round(shapeBytes / 1024)} KB codificados · ajustados a calles: ${matchStats.ok} (${matchStats.partial} por tramos) · se mantiene el oficial en ${matchStats.kept}`);
 
   // --- Fichero principal ---
-  const stopList = [...stops.values()].map((s) => [s.code, s.name, r5(s.lat), r5(s.lon), s.ops, [...s.lines].filter((x) => x !== undefined).sort((a, b) => a - b)]);
+  const stopList = [...stops.values()].map((s) => {
+    const row = [s.code, s.name, r5(s.lat), r5(s.lon), s.ops, [...s.lines].filter((x) => x !== undefined).sort((a, b) => a - b)];
+    if (s.platforms.size) row.push([...s.platforms].sort((a, b) => a - b)); // andenes de metro (códigos iMetro)
+    return row;
+  });
   const index = {
     v: 1,
     generated: new Date().toISOString(),
-    lines: lines.map((l) => [l.id, l.op, l.short, l.long, l.color, l.text, l.url, l.heads || []]),
+    lines: lines.map((l) => [l.id, l.op, l.short, l.long, l.color, l.text, l.url, l.heads || [], l.mode || 'bus']),
+    rail,
     stops: stopList,
     ambStopKey,
     ambPatterns,
     // estaciones de metro/funicular de TMB como lugares buscables
-    places: [...new Map(tmb.stations.map((p) => [p[0], p])).values()],
+    places: [], // las estaciones de metro ya son paradas buscables
     files: fileHashes,
   };
   mkdirSync(OUT, { recursive: true });
