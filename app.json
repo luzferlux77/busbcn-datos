@@ -1,8 +1,8 @@
 {
-  "version": "2.1.1",
-  "notes": "Toca cualquier hora de llegada y el mapa te lleva a ese tren, metro, tranvía o bus. Trenes con morro que marca el sentido de la marcha. Arreglado el error de Rodalies en la web del ordenador y la posición de algunos trenes de metro.",
+  "version": "2.1.2",
+  "notes": "Cada parada lleva el logo de su transporte: metro (rombo rojo con M), TRAM (T verde), Rodalies (R), FGC (F) y bus (TMB rojo, AMB naranja; al acercar el mapa).",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.1/busbcn-web-2.1.1.zip",
-  "checksum": "e87bbdbd67caead4960ae4f83a698b22b1922d94b467aa024b3398d70a730212",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.1/BusMet-v2.1.1.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.2/busbcn-web-2.1.2.zip",
+  "checksum": "84b4d15ef9f80a2ff2926347c83fcedfc55cfe82c6bbd1c118e7f3013929bc58",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.1.2/BusMet-v2.1.2.apk"
 }
