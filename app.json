@@ -1,8 +1,8 @@
 {
-  "version": "2.0.0",
-  "notes": "Ahora se llama BusMet. Metro (con tiempos en directo) y TRAM (con horarios): estaciones con todas sus líneas, red completa en el mapa con los colores de cada línea y botones para mostrar u ocultar Bus, Metro y TRAM.",
+  "version": "2.0.1",
+  "notes": "En el mapa, las estaciones de metro son rombos y las del TRAM cuadrados (el bus sigue en puntos redondos), para distinguirlas con todas las capas a la vista.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.0/busbcn-web-2.0.0.zip",
-  "checksum": "c4fbaf22d3cb40fd6c9618da767e2d59b236abf322b82c00d4ffb644b206d233",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.0/BusMet-v2.0.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.1/busbcn-web-2.0.1.zip",
+  "checksum": "1524a54ed1a5d3286801361e7f9a7ee680dfeb43c59b11ddc3ec6a4bc2029556",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.0.1/BusMet-v2.0.1.apk"
 }
