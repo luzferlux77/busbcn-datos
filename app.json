@@ -1,8 +1,8 @@
 {
-  "version": "2.3.0",
-  "notes": "FGC en tiempo real: pantalla oficial del andén en directo en las estaciones que la tienen, y horas de paso calculadas con el GPS de cada tren (su viaje exacto y su retraso real).",
+  "version": "2.3.1",
+  "notes": "Actualizaciones más fiables: ya no se deshacen en móviles lentos, se reintentan si fallan, se comprueban también al volver a la app y Ajustes muestra el estado con «Buscar actualización ahora». Compatible con móviles más antiguos.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.0/busbcn-web-2.3.0.zip",
-  "checksum": "3f460867cf843857b94031a4d216f84df7034752d50c8b133ab142c28e5e7a39",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.0/BusMet-v2.3.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.1/busbcn-web-2.3.1.zip",
+  "checksum": "8d7e972b3527c8e325694a57065190d0cd95def6669baddc823fbd1c88f64bc4",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.1/BusMet-v2.3.1.apk"
 }
