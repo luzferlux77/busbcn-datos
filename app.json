@@ -1,8 +1,8 @@
 {
-  "version": "2.3.1",
-  "notes": "Actualizaciones más fiables: ya no se deshacen en móviles lentos, se reintentan si fallan, se comprueban también al volver a la app y Ajustes muestra el estado con «Buscar actualización ahora». Compatible con móviles más antiguos.",
+  "version": "2.3.2",
+  "notes": "Nuevo «Acerca de» (bus, metro, TRAM, Rodalies y FGC) con el número de compilación, y textos actualizados.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.1/busbcn-web-2.3.1.zip",
-  "checksum": "8d7e972b3527c8e325694a57065190d0cd95def6669baddc823fbd1c88f64bc4",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.1/BusMet-v2.3.1.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.2/busbcn-web-2.3.2.zip",
+  "checksum": "66f89b25880db3ac95d1cbaa7ce5520743467571680af0b7aa13566a2ce86050",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.2/BusMet-v2.3.2.apk"
 }
