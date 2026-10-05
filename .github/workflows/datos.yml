@@ -1,5 +1,7 @@
-# Regenera cada noche la red de autobuses de BusBCN (paradas, líneas y recorridos)
-# a partir de los GTFS oficiales de TMB y AMB y la publica en GitHub Pages.
+# Regenera cada noche la red de BusMet (bus, metro, TRAM, Rodalies y FGC: paradas, líneas y recorridos)
+# a partir de los GTFS oficiales y la publica en GitHub Pages.
+# Si una fuente oficial falla, se usa su copia guardada; y si aun así no se puede generar la red,
+# se publica la anterior: el aviso de versión nueva de la app no debe quedarse nunca bloqueado.
 # La app comprueba al abrirse si hay una versión nueva y la descarga sola.
 name: Actualizar red de BusBCN
 
@@ -36,7 +38,16 @@ jobs:
       - name: Instalar dependencias
         run: npm install --no-audit --no-fund
 
+      # copias de los GTFS de la última vez (por si una fuente oficial no responde)
+      - uses: actions/cache@v4
+        with:
+          path: cache/*.zip
+          key: gtfs-${{ github.run_id }}
+          restore-keys: gtfs-
+
       - name: Generar la red desde los GTFS oficiales
+        id: build
+        continue-on-error: true
         env:
           TMB_APP_ID: ${{ secrets.TMB_APP_ID }}
           TMB_APP_KEY: ${{ secrets.TMB_APP_KEY }}
@@ -44,7 +55,18 @@ jobs:
           CACHE_DIR: cache
         run: node scripts/build-data.mjs --fresh
 
+      - name: Si no se ha podido generar, se mantiene la red publicada
+        if: steps.build.outcome != 'success'
+        run: |
+          mkdir -p site/data/lines
+          base=https://luzferlux77.github.io/busbcn-datos/data
+          curl -sfL -o site/data/network.json $base/network.json
+          curl -sfL -o site/data/version.json $base/version.json
+          node -e "const n=require('./site/data/network.json');console.log(Object.keys(n.files||{}).join('\n'))" | while read f; do curl -sfL -o "site/data/lines/$f" "$base/lines/$f" || echo "falta $f"; done
+          echo "::warning::No se pudo regenerar la red; se publica la anterior con la versión nueva de la app"
+
       - name: Guardar la caché de recorridos ajustados a calles
+        if: steps.build.outcome == 'success'
         run: |
           git config user.name "busbcn-bot"
           git config user.email "busbcn-bot@users.noreply.github.com"

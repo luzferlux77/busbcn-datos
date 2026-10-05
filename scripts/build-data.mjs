@@ -11,7 +11,11 @@ const OUT = process.env.OUT_DIR || join(import.meta.dirname, '..', 'public', 'da
 const CACHE = process.env.CACHE_DIR || join(import.meta.dirname, '..', '.cache');
 
 const AMB_GTFS = 'https://www.ambmobilitat.cat/OpenData/google_transit.zip';
-const TRAM_GTFS = ['https://opendata.tram.cat/GTFS/zip/TBX.zip', 'https://opendata.tram.cat/GTFS/zip/TBS.zip']; // Trambaix y Trambesòs
+// Trambaix y Trambesòs (si la web del TRAM falla, espejo de Mobility Database)
+const TRAM_GTFS = [
+  ['https://opendata.tram.cat/GTFS/zip/TBX.zip', 'https://files.mobilitydatabase.org/mdb-1003/latest.zip'],
+  ['https://opendata.tram.cat/GTFS/zip/TBS.zip', 'https://files.mobilitydatabase.org/mdb-1004/latest.zip'],
+];
 // Rodalies (núcleo 51 del GTFS de Cercanías de Renfe) y FGC; si la web oficial falla, espejo de Mobility Database
 const RENFE_GTFS = ['https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip', 'https://files.mobilitydatabase.org/mdb-2653/latest.zip'];
 const FGC_GTFS = ['https://www.fgc.cat/google/google_transit.zip', 'https://files.mobilitydatabase.org/mdb-1856/latest.zip'];
@@ -27,19 +31,28 @@ async function download(url, name) {
   if (existsSync(file) && !process.argv.includes('--fresh')) return readFileSync(file);
   const urls = Array.isArray(url) ? url : [url];
   let err;
+  // cada fuente, hasta 3 intentos (los servidores oficiales a veces dan errores pasajeros, p. ej. 502)
   for (const u of urls) {
-    console.log('Descargando', u.replace(/app_key=[^&]+/, 'app_key=***'));
-    try {
-      const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (BusMet; datos abiertos)' } });
-      if (!res.ok) throw new Error(`${u} -> ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${u} -> no es un zip`);
-      writeFileSync(file, buf);
-      return buf;
-    } catch (e) {
-      err = e;
-      console.warn('  ', e.message);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log('Descargando', u.replace(/app_key=[^&]+/, 'app_key=***'), attempt > 1 ? `(intento ${attempt})` : '');
+      try {
+        const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (BusMet; datos abiertos)' }, signal: AbortSignal.timeout(180000) });
+        if (!res.ok) throw new Error(`${u.replace(/app_key=[^&]+/, 'app_key=***')} -> ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${u} -> no es un zip`);
+        writeFileSync(file, buf);
+        return buf;
+      } catch (e) {
+        err = e;
+        console.warn('  ', e.message);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 10000));
+      }
     }
+  }
+  // todas fallan: mejor la copia de la última vez que dejar a todo el mundo sin datos nuevos
+  if (existsSync(file)) {
+    console.warn(`   ⚠️ Se usa la copia guardada de ${name} (la fuente no responde)`);
+    return readFileSync(file);
   }
   throw err;
 }
