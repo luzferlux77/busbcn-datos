@@ -25,10 +25,15 @@ const TMB_GTFS = process.env.TMB_APP_ID
   ? `https://api.tmb.cat/v1/static/datasets/gtfs.zip?app_id=${process.env.TMB_APP_ID}&app_key=${process.env.TMB_APP_KEY}`
   : 'https://files.mobilitydatabase.org/mdb-2359/latest.zip';
 
-async function download(url, name) {
+/**
+ * Descarga un GTFS. `check(buf)` comprueba que trae lo que necesitamos: a veces una fuente oficial responde bien
+ * pero con el fichero incompleto (p. ej. el 05/10/2026 Renfe publicó Cercanías sin ningún tren de Rodalies).
+ * Un fichero que no pasa la comprobación cuenta como fallo: se prueba el espejo y, si no, la última copia buena.
+ */
+async function download(url, name, check = () => true) {
   mkdirSync(CACHE, { recursive: true });
   const file = join(CACHE, name);
-  if (existsSync(file) && !process.argv.includes('--fresh')) return readFileSync(file);
+  if (existsSync(file) && !process.argv.includes('--fresh') && check(readFileSync(file))) return readFileSync(file);
   const urls = Array.isArray(url) ? url : [url];
   let err;
   // cada fuente, hasta 3 intentos (los servidores oficiales a veces dan errores pasajeros, p. ej. 502)
@@ -40,6 +45,11 @@ async function download(url, name) {
         if (!res.ok) throw new Error(`${u.replace(/app_key=[^&]+/, 'app_key=***')} -> ${res.status}`);
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${u} -> no es un zip`);
+        if (!check(buf)) {
+          err = new Error(`${u} -> fichero incompleto`);
+          console.warn('  ', err.message);
+          break; // reintentar la misma fuente no sirve: siguiente fuente
+        }
         writeFileSync(file, buf);
         return buf;
       } catch (e) {
@@ -50,11 +60,26 @@ async function download(url, name) {
     }
   }
   // todas fallan: mejor la copia de la última vez que dejar a todo el mundo sin datos nuevos
-  if (existsSync(file)) {
-    console.warn(`   ⚠️ Se usa la copia guardada de ${name} (la fuente no responde)`);
+  if (existsSync(file) && check(readFileSync(file))) {
+    console.warn(`   ⚠️ Se usa la copia guardada de ${name} (la fuente no responde o viene incompleta)`);
     return readFileSync(file);
   }
   throw err;
+}
+
+/** ¿el GTFS de Cercanías trae trenes de Rodalies de Catalunya (núcleo 51)? */
+function hasRodalies(buf) {
+  try {
+    const z = unzipSync(new Uint8Array(buf), { filter: (f) => f.name === 'trips.txt' });
+    const t = z['trips.txt'];
+    if (!t) return false;
+    let n = 0;
+    const s = strFromU8(t);
+    for (let i = s.indexOf('\n51T'); i >= 0 && n < 100; i = s.indexOf('\n51T', i + 1)) n++;
+    return n >= 100;
+  } catch {
+    return false;
+  }
 }
 
 // CSV con comillas (RFC 4180 simplificado, sin saltos de línea dentro de campos)
@@ -539,7 +564,7 @@ async function main() {
   const [ambZip, tmbZip, renfeZip, fgcZip, ...tramZips] = await Promise.all([
     download(AMB_GTFS, 'amb.zip'),
     download(TMB_GTFS, 'tmb.zip'),
-    download(RENFE_GTFS, 'renfe.zip'),
+    download(RENFE_GTFS, 'renfe.zip', hasRodalies),
     download(FGC_GTFS, 'fgc.zip'),
     ...TRAM_GTFS.map((u, i) => download(u, `tram${i}.zip`)),
   ]);
