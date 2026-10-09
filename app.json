@@ -1,8 +1,8 @@
 {
-  "version": "2.5.0",
-  "notes": "Bicis en el mapa: Bicing y AMBici juntas en la capa «Bici», con bicis mecánicas, eléctricas y anclajes libres en directo. ¿Cómo llego?: los tramos a pie siguen las calles reales y elegir una opción es instantáneo.",
+  "version": "2.6.0",
+  "notes": "Idiomas: castellano, català i English (Ajustes). Estado de los ascensores del metro en directo. Panel «Estado de las fuentes» y modo ahorro de datos en Ajustes. ¿Cómo llego?: tiempos a pie medidos por las calles reales para ordenar bien las opciones. El TRAM consulta mucho menos para que no lo bloqueen.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.5.0/busbcn-web-2.5.0.zip",
-  "checksum": "7654ed76172b7057fde81c250c1be74667126780ae1b2ca2a96fe981597934ba",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.5.0/BusMet-v2.5.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.6.0/busbcn-web-2.6.0.zip",
+  "checksum": "ff69541d4fbdb1f869ae9bba4790677fa715fd400df64ce81bfff4f9a6431acd",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.6.0/BusMet-v2.6.0.apk"
 }
