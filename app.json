@@ -1,8 +1,8 @@
 {
-  "version": "2.7.0",
+  "version": "2.7.1",
   "notes": "",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.0/busbcn-web-2.7.0.zip",
-  "checksum": "7769f28da51ff0ad3874843f24888b84145931f914169eac4da2d1fc53f09462",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.0/BusMet-v2.7.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.1/busbcn-web-2.7.1.zip",
+  "checksum": "3271932636a35c4f7f7ada0d68c709e7e2f0233cf0c96fb502c9fb6d4250d7fa",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.1/BusMet-v2.7.1.apk"
 }
