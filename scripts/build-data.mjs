@@ -843,7 +843,7 @@ function poiCat(t) {
 async function buildPlaces() {
   const cacheFile = join(CACHE, 'pois.json');
   let raw = null;
-  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
     try {
       console.log('Descargando lugares de interés de', url);
       const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(POI_QUERY), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'BusMet/2 (datos abiertos)' }, signal: AbortSignal.timeout(300000) });
@@ -861,7 +861,12 @@ async function buildPlaces() {
     raw = JSON.parse(readFileSync(cacheFile, 'utf8'));
   }
   if (!raw) {
-    console.warn('   Sin lugares de interés');
+    // último recurso: la copia que sube cada versión de la app (seed/places.json en el repositorio de datos)
+    const seed = join(import.meta.dirname, '..', 'seed', 'places.json');
+    if (existsSync(seed)) {
+      console.warn('   ⚠️ Se usan los lugares de la última versión publicada');
+      writeFileSync(join(OUT, 'places.json'), readFileSync(seed));
+    } else console.warn('   Sin lugares de interés');
     return;
   }
   const seen = new Map();
