@@ -1,8 +1,8 @@
 {
-  "version": "2.3.2",
-  "notes": "Nuevo «Acerca de» (bus, metro, TRAM, Rodalies y FGC) con el número de compilación, y textos actualizados.",
+  "version": "2.4.0",
+  "notes": "¿Cómo llego?: rutas con bus, metro, TRAM, Rodalies y FGC en tiempo real. Seguimiento a bordo con aviso al llegar a tu parada. Movimiento de los vehículos mucho más preciso (paran en las paradas, aceleran y frenan). Avisos de Rodalies y FGC. Nuevo icono de horario.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.2/busbcn-web-2.3.2.zip",
-  "checksum": "66f89b25880db3ac95d1cbaa7ce5520743467571680af0b7aa13566a2ce86050",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.3.2/BusMet-v2.3.2.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.4.0/busbcn-web-2.4.0.zip",
+  "checksum": "d2568296099179f97fa2a35dbc93a3e59380f6b1103e1bacd7501d4d673b0d68",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.4.0/BusMet-v2.4.0.apk"
 }
