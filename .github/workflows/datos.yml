@@ -41,7 +41,9 @@ jobs:
       # copias de los GTFS de la última vez (por si una fuente oficial no responde)
       - uses: actions/cache@v4
         with:
-          path: cache/*.zip
+          path: |
+            cache/*.zip
+            cache/pois.json
           key: gtfs-${{ github.run_id }}
           restore-keys: gtfs-
 

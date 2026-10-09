@@ -1,8 +1,8 @@
 {
-  "version": "2.6.1",
-  "notes": "Nuevo diseño más amable de «¿Adónde vas?».",
+  "version": "2.7.0",
+  "notes": "",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.6.1/busbcn-web-2.6.1.zip",
-  "checksum": "0279168f5ad469700b0221b6570dc5d69bbf94c7ad8231fb28303d077e8c5610",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.6.1/BusMet-v2.6.1.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.0/busbcn-web-2.7.0.zip",
+  "checksum": "7769f28da51ff0ad3874843f24888b84145931f914169eac4da2d1fc53f09462",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.7.0/BusMet-v2.7.0.apk"
 }

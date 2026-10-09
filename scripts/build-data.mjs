@@ -794,11 +794,95 @@ async function main() {
   };
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'network.json'), JSON.stringify(index));
+  await buildPlaces();
   // la app consulta este fichero diminuto para saber si hay una red más nueva que la suya
   // huella del contenido (sin la fecha): si no cambia, las apps no descargan nada
   const { generated: _g, ...content } = index;
   writeFileSync(join(OUT, 'version.json'), JSON.stringify({ generated: index.generated, hash: shortHash(JSON.stringify(content)), lines: lines.length, stops: stopList.length }));
   console.log(`Líneas: ${lines.length}. network.json: ${Math.round(JSON.stringify(index).length / 1024)} KB`);
+}
+
+// ---------- lugares de interés (OpenStreetMap) para el buscador ----------
+// Monumentos, museos, hospitales, universidades, centros comerciales, estadios, playas, parques, mercados,
+// teatros, hoteles, terminales del aeropuerto… de todo el área metropolitana. Si Overpass no responde,
+// se usa la copia de la última vez (la búsqueda de lugares nunca se queda vacía).
+const POI_BBOX = '41.20,1.80,41.70,2.55';
+const POI_QUERY = `[out:json][timeout:240];
+(
+  nwr["tourism"~"^(attraction|museum|gallery|viewpoint|theme_park|zoo|aquarium|hotel|hostel)$"]["name"](${POI_BBOX});
+  nwr["amenity"~"^(hospital|clinic|university|college|theatre|cinema|library|townhall|marketplace|arts_centre|conference_centre|exhibition_centre|bus_station|courthouse|place_of_worship|events_venue|music_venue|nightclub)$"]["name"](${POI_BBOX});
+  nwr["leisure"~"^(stadium|park|sports_centre|water_park|marina|garden|beach_resort)$"]["name"](${POI_BBOX});
+  nwr["natural"="beach"]["name"](${POI_BBOX});
+  nwr["shop"~"^(mall|department_store)$"]["name"](${POI_BBOX});
+  nwr["aeroway"="terminal"]["name"](${POI_BBOX});
+  nwr["historic"~"^(monument|castle|archaeological_site|memorial)$"]["name"]["wikidata"](${POI_BBOX});
+  nwr["building"~"^(stadium|cathedral|university|hospital|train_station)$"]["name"](${POI_BBOX});
+);
+out center tags;`;
+
+// categoría (una letra) → la app pone el icono
+function poiCat(t) {
+  if (t.aeroway) return 'a';
+  if (t.amenity === 'hospital' || t.amenity === 'clinic' || t.building === 'hospital') return 'h';
+  if (t.amenity === 'university' || t.amenity === 'college' || t.building === 'university') return 'u';
+  if (t.shop) return 's';
+  if (t.leisure === 'stadium' || t.building === 'stadium' || t.leisure === 'sports_centre') return 'd';
+  if (t.natural === 'beach' || t.leisure === 'beach_resort') return 'b';
+  if (t.leisure === 'park' || t.leisure === 'garden') return 'p';
+  if (t.tourism === 'hotel' || t.tourism === 'hostel') return 'z';
+  if (t.tourism === 'museum' || t.tourism === 'gallery' || t.amenity === 'arts_centre') return 'm';
+  if (t.amenity === 'theatre' || t.amenity === 'cinema' || t.amenity === 'music_venue' || t.amenity === 'events_venue' || t.amenity === 'nightclub') return 't';
+  if (t.amenity === 'marketplace') return 'k';
+  if (t.amenity === 'place_of_worship' || t.building === 'cathedral') return 'w';
+  if (t.amenity === 'townhall' || t.amenity === 'courthouse') return 'g';
+  if (t.amenity === 'library') return 'l';
+  if (t.amenity === 'bus_station' || t.building === 'train_station') return 'e';
+  return 'x'; // monumento, atracción, mirador…
+}
+
+async function buildPlaces() {
+  const cacheFile = join(CACHE, 'pois.json');
+  let raw = null;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      console.log('Descargando lugares de interés de', url);
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(POI_QUERY), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'BusMet/2 (datos abiertos)' }, signal: AbortSignal.timeout(300000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      raw = await r.json();
+      if (!raw.elements?.length) throw new Error('vacío');
+      writeFileSync(cacheFile, JSON.stringify(raw));
+      break;
+    } catch (e) {
+      console.warn('   ', e.message);
+    }
+  }
+  if (!raw && existsSync(cacheFile)) {
+    console.warn('   ⚠️ Se usan los lugares de la última vez');
+    raw = JSON.parse(readFileSync(cacheFile, 'utf8'));
+  }
+  if (!raw) {
+    console.warn('   Sin lugares de interés');
+    return;
+  }
+  const seen = new Map();
+  for (const e of raw.elements) {
+    const t = e.tags || {};
+    const lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon;
+    if (lat == null || !t.name) continue;
+    const name = t.name.trim();
+    const key = name.toLowerCase() + '|' + lat.toFixed(3) + ',' + lon.toFixed(3);
+    if (seen.has(key)) continue;
+    // otros nombres por los que se busca (castellano, inglés, nombre corto u oficial)
+    const alias = [...new Set([t['name:es'], t['name:en'], t['name:ca'], t.alt_name, t.short_name, t.official_name].filter((x) => x && x !== name))].join('|');
+    const town = t['addr:city'] || '';
+    const row = [name, r5(lat), r5(lon), poiCat(t)];
+    if (alias || town) row.push(alias);
+    if (town) row.push(town);
+    seen.set(key, row);
+  }
+  const places = [...seen.values()];
+  writeFileSync(join(OUT, 'places.json'), JSON.stringify({ generated: new Date().toISOString(), places }));
+  console.log(`Lugares de interés: ${places.length}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
