@@ -1,8 +1,8 @@
 {
-  "version": "2.4.0",
-  "notes": "¿Cómo llego?: rutas con bus, metro, TRAM, Rodalies y FGC en tiempo real. Seguimiento a bordo con aviso al llegar a tu parada. Movimiento de los vehículos mucho más preciso (paran en las paradas, aceleran y frenan). Avisos de Rodalies y FGC. Nuevo icono de horario.",
+  "version": "2.5.0",
+  "notes": "Bicis en el mapa: Bicing y AMBici juntas en la capa «Bici», con bicis mecánicas, eléctricas y anclajes libres en directo. ¿Cómo llego?: los tramos a pie siguen las calles reales y elegir una opción es instantáneo.",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.4.0/busbcn-web-2.4.0.zip",
-  "checksum": "d2568296099179f97fa2a35dbc93a3e59380f6b1103e1bacd7501d4d673b0d68",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.4.0/BusMet-v2.4.0.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.5.0/busbcn-web-2.5.0.zip",
+  "checksum": "7654ed76172b7057fde81c250c1be74667126780ae1b2ca2a96fe981597934ba",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.5.0/BusMet-v2.5.0.apk"
 }
