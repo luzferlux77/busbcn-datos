@@ -473,7 +473,8 @@ function processFeed(zip, op, opt = {}) {
       let pc = patternCount.get(key);
       if (!pc) {
         const [route, dir, shape, head] = base.split('|');
-        pc = { n: 0, trip: tid, route, dir: +dir, shape, head: head || stopsById.get(arr.at(-1)[1])?.name || '' };
+        // sin cabecera publicada (TRAM), el destino es la última parada del viaje
+        pc = { n: 0, trip: tid, route, dir: +dir, shape, head: (head && head !== 'undefined' ? head : '') || stopsById.get(arr.at(-1)[1])?.name || '' };
         patternCount.set(key, pc);
         patternStops.set(key, inb);
       }
@@ -572,11 +573,11 @@ async function main() {
   const tmbZ = unzipSync(new Uint8Array(tmbZip));
   const tmb = processFeed(tmbZ, 'tmb');
   console.log('Procesando metro…');
-  const metro = processFeed(tmbZ, 'tmb', { mode: 'metro', P: 'm:', types: new Set(['1', '7']), keyPrefix: 'M', bit: 4 });
+  const metro = processFeed(tmbZ, 'tmb', { mode: 'metro', P: 'm:', types: new Set(['1', '7']), keyPrefix: 'M', bit: 4, sig: true });
   console.log('Procesando AMB…');
   const amb = processFeed(unzipSync(new Uint8Array(ambZip)), 'amb');
   console.log('Procesando TRAM…');
-  const trams = tramZips.map((z, i) => processFeed(unzipSync(new Uint8Array(z)), 'tram', { mode: 'tram', P: `r${i}:`, types: new Set(['0', '2', '900']), keyPrefix: 'T', bit: 8, defColor: '008080' }));
+  const trams = tramZips.map((z, i) => processFeed(unzipSync(new Uint8Array(z)), 'tram', { mode: 'tram', P: `r${i}:`, types: new Set(['0', '2', '900']), keyPrefix: 'T', bit: 8, defColor: '008080', sig: true }));
   console.log('Procesando Rodalies…');
   const GTFS_FILES = /^(agency|routes|trips|stops|stop_times|calendar|calendar_dates|shapes|frequencies).txt$/;
   const rodalies = processFeed(unzipSync(new Uint8Array(renfeZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'renfe', {
