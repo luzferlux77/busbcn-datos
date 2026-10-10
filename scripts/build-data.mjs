@@ -799,6 +799,7 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'network.json'), JSON.stringify(index));
   await buildPlaces();
+  await buildStations(stops, lines);
   // la app consulta este fichero diminuto para saber si hay una red más nueva que la suya
   // huella del contenido (sin la fecha): si no cambia, las apps no descargan nada
   const { generated: _g, ...content } = index;
@@ -892,6 +893,90 @@ async function buildPlaces() {
   const places = [...seen.values()];
   writeFileSync(join(OUT, 'places.json'), JSON.stringify({ generated: new Date().toISOString(), places }));
   console.log(`Lugares de interés: ${places.length}`);
+}
+
+// ---------- andenes y accesos del metro (OpenStreetMap) para el «mejor vagón» ----------
+// Por cada estación de metro (y FGC con trazado de metro): dónde está el andén de cada línea y dónde están los
+// accesos (con el nombre de su calle). Con el sentido de la marcha, la app sabe si te conviene ir delante, en
+// medio o detrás para el transbordo o para la salida más cercana a tu destino.
+const METRO_BBOX = '41.20,1.85,41.65,2.40';
+const METRO_OSM_QUERY = `[out:json][timeout:180];
+rel["route"="subway"](${METRO_BBOX});
+out body;
+node(r)["public_transport"="stop_position"];
+out;
+node["railway"="subway_entrance"](${METRO_BBOX});
+out;`;
+
+async function overpassJson(query, cacheFile, label) {
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      console.log(`Descargando ${label} de`, url);
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'BusMet/2 (datos abiertos)' }, signal: AbortSignal.timeout(240000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const raw = await r.json();
+      if (!raw.elements?.length) throw new Error('vacío');
+      writeFileSync(cacheFile, JSON.stringify(raw));
+      return raw;
+    } catch (e) {
+      console.warn('   ', e.message);
+    }
+  }
+  if (existsSync(cacheFile)) {
+    console.warn(`   ⚠️ Se usan ${label} de la última vez`);
+    return JSON.parse(readFileSync(cacheFile, 'utf8'));
+  }
+  return null;
+}
+
+async function buildStations(stops, lines) {
+  const raw = await overpassJson(METRO_OSM_QUERY, join(CACHE, 'metro-osm.json'), 'andenes y accesos del metro');
+  if (!raw) {
+    const seed = join(import.meta.dirname, '..', 'seed', 'stations.json');
+    if (existsSync(seed)) {
+      console.warn('   ⚠️ Se usan los andenes de la última versión publicada');
+      writeFileSync(join(OUT, 'stations.json'), readFileSync(seed));
+    } else console.warn('   Sin andenes del metro');
+    return;
+  }
+  const nodes = new Map(raw.elements.filter((e) => e.type === 'node').map((e) => [e.id, e]));
+  // estaciones de metro y FGC con los nombres de sus líneas
+  const st = [...stops.values()]
+    .filter((s) => s.ops & (4 | 32))
+    .map((s) => ({ code: s.code, lat: s.lat, lon: s.lon, shorts: new Set([...s.lines].map((li) => lines[li]?.short).filter(Boolean)) }));
+  const nearest = (lat, lon, ok, max) => {
+    let best = null, bd = max;
+    for (const s of st) {
+      if (!ok(s)) continue;
+      const d = dist([lat, lon], [s.lat, s.lon]);
+      if (d < bd) [best, bd] = [s, d];
+    }
+    return best;
+  };
+  const out = {};
+  const slot = (code) => (out[code] ??= { p: {}, e: [] });
+  for (const rel of raw.elements.filter((e) => e.type === 'relation')) {
+    const ref = rel.tags?.ref;
+    if (!ref) continue;
+    for (const m of rel.members ?? []) {
+      if (m.type !== 'node' || !/^stop/.test(m.role)) continue;
+      const n = nodes.get(m.ref);
+      if (!n) continue;
+      const s = nearest(n.lat, n.lon, (x) => x.shorts.has(ref), 250);
+      if (!s) continue;
+      const list = (slot(s.code).p[ref] ??= []);
+      if (!list.some(([la, lo]) => dist([la, lo], [n.lat, n.lon]) < 8)) list.push([r5(n.lat), r5(n.lon)]);
+    }
+  }
+  for (const n of nodes.values()) {
+    if (n.tags?.railway !== 'subway_entrance') continue;
+    const s = nearest(n.lat, n.lon, () => true, 300);
+    if (!s) continue;
+    slot(s.code).e.push([(n.tags.name || n.tags.ref || '').trim(), r5(n.lat), r5(n.lon), n.tags.wheelchair === 'yes' ? 1 : 0]);
+  }
+  writeFileSync(join(OUT, 'stations.json'), JSON.stringify({ generated: new Date().toISOString(), st: out }));
+  const withLines = Object.values(out).filter((o) => Object.keys(o.p).length).length;
+  console.log(`Andenes del metro: ${withLines} estaciones con posición de andén · ${Object.values(out).reduce((a, o) => a + o.e.length, 0)} accesos`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
