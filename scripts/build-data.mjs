@@ -21,6 +21,8 @@ const RENFE_GTFS = ['https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_
 const FGC_GTFS = ['https://www.fgc.cat/google/google_transit.zip', 'https://files.mobilitydatabase.org/mdb-1856/latest.zip'];
 // área metropolitana (de Garraf a Mataró, de Martorell/Terrassa/Sabadell/Granollers al mar)
 const METRO_AREA = [41.24, 1.86, 41.66, 2.47];
+// trenes (Rodalies y FGC): la red entera de Catalunya, para que un tren no desaparezca al salir del área
+const RAIL_AREA = [40.5, 0.15, 42.95, 3.35];
 const TMB_GTFS = process.env.TMB_APP_ID
   ? `https://api.tmb.cat/v1/static/datasets/gtfs.zip?app_id=${process.env.TMB_APP_ID}&app_key=${process.env.TMB_APP_KEY}`
   : 'https://files.mobilitydatabase.org/mdb-2359/latest.zip';
@@ -583,13 +585,13 @@ async function main() {
   const rodalies = processFeed(unzipSync(new Uint8Array(renfeZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'renfe', {
     mode: 'rodalies', P: 'rod:', types: new Set(['2']), keyPrefix: 'R', bit: 16, defColor: 'E2231A', match: false,
     routeFilter: (r) => r.route_id.startsWith('51T'), // núcleo 51 = Rodalies de Catalunya
-    groupShort: true, codeOf: (id) => id.replace(/^0+(?=d)/, ''), bbox: METRO_AREA, sig: true,
+    groupShort: true, codeOf: (id) => id.replace(/^0+(?=d)/, ''), bbox: RAIL_AREA, sig: true, tripIds: true,
     pre: { trips: (l) => l.startsWith('51T'), stop_times: (l) => l.startsWith('51') },
   });
   console.log('Procesando FGC…');
   const fgc = processFeed(unzipSync(new Uint8Array(fgcZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'fgc', {
     mode: 'fgc', P: 'fgc:', types: new Set(['1', '2', '7']), keyPrefix: 'F', bit: 32, defColor: 'F26F21', match: false,
-    codeOf: (id) => id, bbox: METRO_AREA, sig: true, tripIds: true,
+    codeOf: (id) => id, bbox: RAIL_AREA, sig: true, tripIds: true,
   });
   const FEEDS = [tmb, amb, metro, ...trams, rodalies, fgc];
 
@@ -748,7 +750,8 @@ async function main() {
         const groups = [...byPat[pi]].map(([si, trips]) => [si, trips.sort((a, b) => a[0] - b[0])]);
         o.t = groups.map(([si, trips]) => [si, ...trips.map(([m], i) => (i ? m - trips[i - 1][0] : m))]);
         // FGC: identificador de cada viaje (última parte del trip_id), para quitar los cancelados en tiempo real
-        if (feed.tripIds) o.ti = groups.map(([, trips]) => trips.map(([, id]) => id.split('|').pop()));
+        // Rodalies: el número de tren («5181S25510R2S» → 25510), para emparejarlo con el mismo tren en directo
+        if (feed.tripIds) o.ti = groups.map(([, trips]) => trips.map(([, id]) => (feed.op === 'renfe' ? (String(id).trim().match(/^\d{4}[A-Z](\d+)/)?.[1] ?? '') : id.split('|').pop())));
       });
       const lineJson = JSON.stringify({ id: P + routeId, patterns: out, cal: { base: CAL.base, svc: [...svcIdx.keys()].map((sid) => feed.svcMasks.get(sid)) } });
       const lineName = `${P.replace(':', '_')}${routeId.replace(/[^\w.-]/g, '_')}.json`;
