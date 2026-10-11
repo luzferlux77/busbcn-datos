@@ -651,6 +651,74 @@ async function main() {
     return stops.has(`${feed.op}-${s.code}`) ? `${feed.op}-${s.code}` : null;
   };
 
+  /**
+   * Trazado de un tren sin «shape»: entre dos estaciones seguidas de su recorrido, si otros trenes de la misma red
+   * pasan por estaciones intermedias (el semidirecto se las salta), se dibuja por ellas: así sigue la vía y no una
+   * recta de 20 km. Camino más corto en el grafo de estaciones, penalizando los saltos largos (también rectos).
+   */
+  function stationGraph(feed) {
+    const adj = new Map();
+    const ll = (k) => [stops.get(k).lat, stops.get(k).lon];
+    const add = (a, b) => {
+      if (a === b) return;
+      const d = dist(ll(a), ll(b));
+      for (const [x, y] of [[a, b], [b, a]]) {
+        if (!adj.has(x)) adj.set(x, new Map());
+        adj.get(x).set(y, d);
+      }
+    };
+    for (const key of feed.patternCount.keys()) {
+      const seq = (feed.patternStops.get(key) || []).slice().sort((a, b) => a[0] - b[0]);
+      const keys = seq.map(([, id]) => stopIdToKey(feed, id)).filter(Boolean);
+      for (let i = 1; i < keys.length; i++) add(keys[i - 1], keys[i]);
+    }
+    const w = (d) => d + (d * d) / 4000; // un salto de 10 km «cuesta» como 35 km: se prefieren las estaciones intermedias
+    const memo = new Map();
+    const path = (a, b) => {
+      const mk = a + '>' + b;
+      if (memo.has(mk)) return memo.get(mk);
+      const direct = dist(ll(a), ll(b));
+      let res = null;
+      if (direct > 1500 && adj.has(a) && adj.has(b)) {
+        const best = new Map([[a, 0]]), prev = new Map(), done = new Set();
+        const limit = w(direct) * 1.05;
+        while (true) {
+          let u = null, bu = Infinity;
+          for (const [k, v] of best) if (!done.has(k) && v < bu) [u, bu] = [k, v];
+          if (u === null || bu > limit) break;
+          if (u === b) break;
+          done.add(u);
+          for (const [v, d] of adj.get(u)) {
+            if (u === a && v === b) continue; // el propio salto directo no cuenta
+            const nv = bu + w(d);
+            if (nv < (best.get(v) ?? Infinity)) {
+              best.set(v, nv);
+              prev.set(v, u);
+            }
+          }
+        }
+        if (prev.has(b)) {
+          const chain = [b];
+          while (chain[0] !== a) chain.unshift(prev.get(chain[0]));
+          let len = 0;
+          for (let i = 1; i < chain.length; i++) len += dist(ll(chain[i - 1]), ll(chain[i]));
+          // solo si es de verdad el mismo camino (no un rodeo por otra línea)
+          if (chain.length > 2 && len <= direct * 1.3 + 500) res = chain;
+        }
+      }
+      memo.set(mk, res);
+      return res;
+    };
+    return (keys) => {
+      const out = [ll(keys[0])];
+      for (let i = 1; i < keys.length; i++) {
+        const ch = path(keys[i - 1], keys[i]);
+        for (const k of ch ? ch.slice(1) : [keys[i]]) out.push(ll(k));
+      }
+      return out;
+    };
+  }
+
   // --- Patrones por línea (ficheros individuales, carga perezosa) ---
   rmSync(join(OUT, 'lines'), { recursive: true, force: true });
   mkdirSync(join(OUT, 'lines'), { recursive: true });
@@ -660,6 +728,9 @@ async function main() {
   const rail = []; // trazado de metro y tranvía para dibujar la red completa en el mapa
   for (const feed of FEEDS) {
     const P = feed.P;
+    // trenes sin trazado oficial (Renfe no lo publica): grafo de estaciones con todos los recorridos de la red,
+    // para que un tren que se salta estaciones no se dibuje en línea recta campo a través
+    const railChain = feed.mode !== 'bus' ? stationGraph(feed) : null;
     const byRoute = new Map();
     for (const [key, pc] of feed.patternCount) {
       if (!byRoute.has(pc.route)) byRoute.set(pc.route, []);
@@ -711,7 +782,7 @@ async function main() {
           }
           poly = encodePolyline(simplify(pts, 0.00002));
         } else {
-          poly = encodePolyline(stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
+          poly = encodePolyline(railChain ? railChain(stopKeys) : stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
         }
         shapeBytes += poly.length;
         keyToIdx.set(p.key, out.length);
