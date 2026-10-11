@@ -809,7 +809,7 @@ async function main() {
         const sh = feed.shapes.get(p.shape);
         const onTracks = feed.op === 'renfe' && railNet ? railNet.follow(stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]), railChain) : null;
         if (onTracks) {
-          poly = encodePolyline(simplify(onTracks, 0.00005));
+          poly = encodePolyline(railNet.despike(simplify(onTracks, 0.00005), stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon])));
         } else if (sh) {
           sh.sort((a, b) => a[0] - b[0]);
           let pts = sh.map(([, la, lo]) => [la, lo]);
@@ -1249,7 +1249,9 @@ function railGraph(ways) {
   const memo = new Map();
   /** recorrido por las vías de una secuencia de estaciones; cada tramo que no se pueda, por estaciones intermedias */
   const follow = (stations, fallback) => {
-    const out = [stations[0]];
+    // solo puntos de la vía: el punto exacto de la estación a veces queda a decenas de metros de las vías
+    // principales (Sants, Plaça de Catalunya…) y, si se añadía, la línea hacía un pico hasta él y volvía
+    const out = [];
     let onRail = 0;
     for (let i = 1; i < stations.length; i++) {
       const a = stations[i - 1], b = stations[i];
@@ -1267,14 +1269,54 @@ function railGraph(ways) {
         memo.set(key, seg);
       }
       if (seg) {
-        out.push(...seg, b);
+        const last = out[out.length - 1];
+        out.push(...(last && last[0] === seg[0][0] && last[1] === seg[0][1] ? seg.slice(1) : seg));
         onRail++;
       } else {
+        if (!out.length) out.push(a);
         out.push(...(fallback ? fallback.between(a, b) : []), b);
       }
     }
-    return onRail ? out : null;
+    return onRail ? despike(unloop(out, stations), stations) : null;
+  };
+  // ¿quitar estos puntos deja una estación del recorrido lejos de la línea? (los trenes que entran en una
+  // terminal y salen marcha atrás, como en Tortosa o Cerbère, hacen una ida y vuelta de verdad)
+  const segDist = (p, a, b) => {
+    const ax = (a[1] - p[1]) * 83000, ay = (a[0] - p[0]) * 111000, bx = (b[1] - p[1]) * 83000, by = (b[0] - p[0]) * 111000;
+    const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+    return Math.hypot(ax + t * dx, ay + t * dy);
+  };
+  const needed = (stations, removed, a, b) => stations.some((st) => segDist(st, a, b) > 300 && removed.some((q) => dist(st, q) < 300));
+  /** corta los rodeos: si el camino vuelve a pasar a < 30 m de un punto anterior tras dar una vuelta, sobra la vuelta */
+  const unloop = (pts, stations = []) => {
+    const P = pts.slice();
+    for (let i = 0; i < P.length; i++) {
+      let run = 0;
+      for (let j = i + 1; j < Math.min(P.length, i + 80); j++) {
+        run += dist(P[j - 1], P[j]);
+        if (j > i + 1 && run > 120 && dist(P[i], P[j]) < 30) {
+          if (!needed(stations, P.slice(i + 1, j), P[i], P[j])) P.splice(i + 1, j - i - 1);
+          break;
+        }
+      }
+    }
+    return P;
+  };
+  /** quita las idas y vueltas (la estación enganchada a una vía secundaria hace entrar y salir de ella) */
+  const despike = (pts, stations = []) => {
+    const P = pts.slice();
+    const vec = (a, b) => [(b[1] - a[1]) * 83000, (b[0] - a[0]) * 111000];
+    for (let i = 1; i + 1 < P.length; ) {
+      const u = vec(P[i], P[i - 1]), v = vec(P[i], P[i + 1]);
+      const lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]);
+      if (lu > 0 && lv > 0 && (u[0] * v[0] + u[1] * v[1]) / (lu * lv) > 0.9 && !needed(stations, [P[i]], P[i - 1], P[i + 1])) {
+        P.splice(i, 1);
+        i = Math.max(1, i - 1);
+      } else i++;
+    }
+    return P;
   };
   console.log(`Vías de tren: ${lat.length} puntos`);
-  return { follow };
+  return { follow, despike };
 }
