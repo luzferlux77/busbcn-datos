@@ -742,8 +742,17 @@ async function main() {
       }
       return out;
     };
-    return { chain, fixPts };
+    /** respaldo para un tramo: estaciones intermedias entre dos estaciones (por coordenadas) */
+    const between = (p, q) => {
+      const a = near(p), b = near(q);
+      const ch = a && b && a !== b ? path(a, b) : null;
+      return ch ? ch.slice(1, -1).map(ll) : [];
+    };
+    return { chain, fixPts, between };
   }
+
+  // vías de tren reales (OpenStreetMap) para dibujar Rodalies por donde va el tren
+  const railNet = await loadRailNet();
 
   // --- Patrones por línea (ficheros individuales, carga perezosa) ---
   rmSync(join(OUT, 'lines'), { recursive: true, force: true });
@@ -798,7 +807,10 @@ async function main() {
         if (stopKeys.length < 2) continue;
         let poly = '';
         const sh = feed.shapes.get(p.shape);
-        if (sh) {
+        const onTracks = feed.op === 'renfe' && railNet ? railNet.follow(stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]), railChain) : null;
+        if (onTracks) {
+          poly = encodePolyline(simplify(onTracks, 0.00005));
+        } else if (sh) {
           sh.sort((a, b) => a[0] - b[0]);
           let pts = sh.map(([, la, lo]) => [la, lo]);
           if (feed.sig) pts = clipShape(pts, stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon])) ?? stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]);
@@ -1078,3 +1090,191 @@ async function buildStations(stops, lines) {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
+
+
+// ---------- vías de tren reales (OpenStreetMap) ----------
+const RAIL_OSM_QUERY = `[out:json][timeout:240];way["railway"="rail"][!"service"](${RAIL_AREA.join(',')});out geom qt;`;
+
+/** red de vías de Catalunya: se descarga como mucho cada 60 días (casi no cambia); si no, la de la caché o la copia */
+async function loadRailNet() {
+  const cacheFile = join(CACHE, 'rail-osm.json');
+  const seed = join(import.meta.dirname, '..', 'seed', 'rail-osm.json');
+  let data = existsSync(cacheFile) ? JSON.parse(readFileSync(cacheFile, 'utf8')) : null;
+  const old = !data || Date.now() - Date.parse(data.generated || 0) > 60 * 864e5;
+  if (old) {
+    for (const url of ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']) {
+      try {
+        console.log('Descargando las vías de tren de', url);
+        const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(RAIL_OSM_QUERY), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'BusMet/2 (datos abiertos)' }, signal: AbortSignal.timeout(240000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const raw = await r.json();
+        const ways = raw.elements.filter((e) => e.type === 'way' && e.geometry).map((w) => w.geometry.flatMap((g) => [Math.round(g.lat * 1e6), Math.round(g.lon * 1e6)]));
+        if (ways.length < 500) throw new Error('incompleto');
+        data = { generated: new Date().toISOString(), ways };
+        writeFileSync(cacheFile, JSON.stringify(data));
+        break;
+      } catch (e) {
+        console.warn('   ', e.message);
+      }
+    }
+  }
+  if (!data && existsSync(seed)) {
+    console.warn('   ⚠️ Se usan las vías de la última versión publicada');
+    data = JSON.parse(readFileSync(seed, 'utf8'));
+  }
+  if (!data) {
+    console.warn('   Sin vías de tren: Rodalies se dibuja por estaciones');
+    return null;
+  }
+  return railGraph(data.ways);
+}
+
+/** grafo de las vías: nodos = puntos de las vías (los compartidos unen las vías entre sí) */
+function railGraph(ways) {
+  const id = new Map();
+  const lat = [], lon = [], adj = [];
+  const node = (la, lo) => {
+    const k = la * 1e9 + lo;
+    let i = id.get(k);
+    if (i === undefined) {
+      i = lat.length;
+      id.set(k, i);
+      lat.push(la / 1e6);
+      lon.push(lo / 1e6);
+      adj.push([]);
+    }
+    return i;
+  };
+  for (const w of ways) {
+    let prev = -1;
+    for (let j = 0; j < w.length; j += 2) {
+      const n = node(w[j], w[j + 1]);
+      if (prev >= 0 && prev !== n) {
+        const d = dist([lat[prev], lon[prev]], [lat[n], lon[n]]);
+        adj[prev].push(n, d);
+        adj[n].push(prev, d);
+      }
+      prev = n;
+    }
+  }
+  // rejilla para encontrar la vía más cercana a cada estación
+  const G = 0.01, grid = new Map();
+  const cell = (a, b) => `${Math.floor(a / G)},${Math.floor(b / G)}`;
+  for (let i = 0; i < lat.length; i++) {
+    const c = cell(lat[i], lon[i]);
+    if (!grid.has(c)) grid.set(c, []);
+    grid.get(c).push(i);
+  }
+  // «cosido»: en OpenStreetMap a veces dos tramos de la misma vía no comparten el punto de unión (quedan a pocos
+  // metros); sin unirlos, el camino daba un rodeo de decenas de km. Cada final de vía se une a lo que tenga a < 25 m
+  const ends = [];
+  for (const w of ways) if (w.length >= 4) ends.push(id.get(w[0] * 1e9 + w[1]), id.get(w[w.length - 2] * 1e9 + w[w.length - 1]));
+  for (const e of ends) {
+    const ci = Math.floor(lat[e] / G), cj = Math.floor(lon[e] / G);
+    for (let a = ci - 1; a <= ci + 1; a++)
+      for (let b = cj - 1; b <= cj + 1; b++)
+        for (const i of grid.get(`${a},${b}`) || []) {
+          if (i === e) continue;
+          const d = dist([lat[e], lon[e]], [lat[i], lon[i]]);
+          if (d < 25 && !adj[e].includes(i)) {
+            adj[e].push(i, d);
+            adj[i].push(e, d);
+          }
+        }
+  }
+  const snap = ([la, lo]) => {
+    let best = -1, bd = 400;
+    const ci = Math.floor(la / G), cj = Math.floor(lo / G);
+    for (let a = ci - 1; a <= ci + 1; a++)
+      for (let b = cj - 1; b <= cj + 1; b++)
+        for (const i of grid.get(`${a},${b}`) || []) {
+          const d = dist([la, lo], [lat[i], lon[i]]);
+          if (d < bd) [best, bd] = [i, d];
+        }
+    return best;
+  };
+  // A* por las vías (montículo binario)
+  const route = (s, t) => {
+    const g = new Map([[s, 0]]), prev = new Map(), closed = new Set();
+    const h = (i) => dist([lat[i], lon[i]], [lat[t], lon[t]]);
+    const heap = [[h(s), s]];
+    const push = (x) => {
+      heap.push(x);
+      let i = heap.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]];
+        i = p;
+      }
+    };
+    const pop = () => {
+      const top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        let i = 0;
+        for (;;) {
+          const l = 2 * i + 1, r = l + 1;
+          let m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]];
+          i = m;
+        }
+      }
+      return top;
+    };
+    let steps = 0;
+    while (heap.length && steps++ < 400000) {
+      const [, u] = pop();
+      if (u === t) break;
+      if (closed.has(u)) continue;
+      closed.add(u);
+      const a = adj[u];
+      for (let k = 0; k < a.length; k += 2) {
+        const v = a[k], nd = g.get(u) + a[k + 1];
+        if (nd < (g.get(v) ?? Infinity)) {
+          g.set(v, nd);
+          prev.set(v, u);
+          push([nd + h(v), v]);
+        }
+      }
+    }
+    if (!g.has(t)) return null;
+    const out = [t];
+    while (out[0] !== s) out.unshift(prev.get(out[0]));
+    return { pts: out.map((i) => [lat[i], lon[i]]), len: g.get(t) };
+  };
+  const memo = new Map();
+  /** recorrido por las vías de una secuencia de estaciones; cada tramo que no se pueda, por estaciones intermedias */
+  const follow = (stations, fallback) => {
+    const out = [stations[0]];
+    let onRail = 0;
+    for (let i = 1; i < stations.length; i++) {
+      const a = stations[i - 1], b = stations[i];
+      const key = a.join() + '>' + b.join();
+      let seg = memo.get(key);
+      if (seg === undefined) {
+        seg = null;
+        const sa = snap(a), sb = snap(b);
+        const straight = dist(a, b);
+        if (sa >= 0 && sb >= 0 && sa !== sb) {
+          const r = route(sa, sb);
+          // por la vía, sin rodeos absurdos (un tren no da la vuelta por otra línea)
+          if (r && r.len <= straight * 1.6 + 1500) seg = r.pts;
+        }
+        memo.set(key, seg);
+      }
+      if (seg) {
+        out.push(...seg, b);
+        onRail++;
+      } else {
+        out.push(...(fallback ? fallback.between(a, b) : []), b);
+      }
+    }
+    return onRail ? out : null;
+  };
+  console.log(`Vías de tren: ${lat.length} puntos`);
+  return { follow };
+}
