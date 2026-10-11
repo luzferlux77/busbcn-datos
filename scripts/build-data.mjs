@@ -709,7 +709,7 @@ async function main() {
       memo.set(mk, res);
       return res;
     };
-    return (keys) => {
+    const chain = (keys) => {
       const out = [ll(keys[0])];
       for (let i = 1; i < keys.length; i++) {
         const ch = path(keys[i - 1], keys[i]);
@@ -717,6 +717,32 @@ async function main() {
       }
       return out;
     };
+    // también para los «trazados» oficiales que solo unen estaciones en recta (Renfe): cada recta de más de
+    // 2,5 km entre dos estaciones se cambia por el camino por las estaciones intermedias
+    const nodes = [...adj.keys()].map((k) => [k, ll(k)]);
+    const near = (p) => {
+      let best = null, bd = 250;
+      for (const [k, q] of nodes) {
+        const d = dist(p, q);
+        if (d < bd) [best, bd] = [k, d];
+      }
+      return best;
+    };
+    const fixPts = (pts) => {
+      const out = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        if (dist(pts[i - 1], pts[i]) > 2500) {
+          const a = near(pts[i - 1]), b = near(pts[i]);
+          const ch = a && b && a !== b ? path(a, b) : null;
+          if (ch) {
+            for (const k of ch.slice(1, -1)) out.push(ll(k));
+          }
+        }
+        out.push(pts[i]);
+      }
+      return out;
+    };
+    return { chain, fixPts };
   }
 
   // --- Patrones por línea (ficheros individuales, carga perezosa) ---
@@ -780,9 +806,10 @@ async function main() {
             const matched = await matchToStreets(`${feed.op}_${p.shape}`, pts, stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
             if (matched) { pts = matched; matchStats.ok++; } else matchStats.kept++;
           }
+          if (railChain) pts = railChain.fixPts(pts);
           poly = encodePolyline(simplify(pts, 0.00002));
         } else {
-          poly = encodePolyline(railChain ? railChain(stopKeys) : stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
+          poly = encodePolyline(railChain ? railChain.chain(stopKeys) : stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
         }
         shapeBytes += poly.length;
         keyToIdx.set(p.key, out.length);
