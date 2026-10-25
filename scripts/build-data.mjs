@@ -781,8 +781,13 @@ async function main() {
       const keyToIdx = new Map();
       for (const p of pats) {
         const isMain = !out.some((o) => o.d === p.dir);
-        if (!isMain && !feed.sig && p.n / totalByDir[p.dir] < 0.05) continue;
         const seq = (feed.patternStops.get(p.key) || []).sort((a, b) => a[0] - b[0]);
+        // variante con muy pocos viajes: se descarta, salvo que pase por paradas que no cubre ningún otro recorrido
+        // (el cementerio, la universidad…: si no, esas paradas no tenían ninguna línea para el planificador)
+        if (!isMain && !feed.sig && p.n / totalByDir[p.dir] < 0.05) {
+          const covered = new Set(out.flatMap((o) => o.s));
+          if (seq.every(([, id]) => { const k = stopIdToKey(feed, id); return !k || covered.has(k); })) continue;
+        }
         const withKeys = seq.map(([, id, secs]) => [stopIdToKey(feed, id), secs]).filter(([k]) => k);
         const stopKeys = withKeys.map(([k]) => k);
         const t0 = withKeys.find(([, x]) => x >= 0)?.[1] ?? 0;
@@ -819,6 +824,10 @@ async function main() {
             if (matched) { pts = matched; matchStats.ok++; } else matchStats.kept++;
           }
           if (railChain) pts = railChain.fixPts(pts);
+          // el recorrido oficial a veces empieza o acaba antes de la primera o la última parada: se alarga hasta ellas
+          const first = [stops.get(stopKeys[0]).lat, stops.get(stopKeys[0]).lon], last = [stops.get(stopKeys.at(-1)).lat, stops.get(stopKeys.at(-1)).lon];
+          if (dist(first, pts[0]) > 150 && distToLine(first, pts) > 150) pts = [first, ...pts];
+          if (dist(last, pts.at(-1)) > 150 && distToLine(last, pts) > 150) pts = [...pts, last];
           poly = encodePolyline(simplify(pts, 0.00002));
         } else {
           poly = encodePolyline(railChain ? railChain.chain(stopKeys) : stopKeys.map((k) => [stops.get(k).lat, stops.get(k).lon]));
