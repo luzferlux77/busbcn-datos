@@ -10,7 +10,10 @@ on:
     - cron: '30 3 * * *' # cada día a las 03:30 UTC (05:30 en Barcelona en verano)
   workflow_dispatch: {} # y a mano desde la pestaña Actions
   push:
-    paths: ['app.json'] # al publicar una versión nueva de la app
+    # al publicar una versión nueva de la app, solo en la rama principal: las etiquetas de versión (v2.13.x)
+    # también son «push», pero GitHub Pages no admite publicar desde una etiqueta y la ejecución fallaba siempre
+    branches: [main]
+    paths: ['app.json']
 
 permissions:
   contents: write
