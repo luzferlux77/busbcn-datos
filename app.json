@@ -1,8 +1,8 @@
 {
-  "version": "2.13.18",
-  "notes": "",
+  "version": "2.13.19",
+  "notes": "Revisión a fondo: Rodalies muestra el horario si no hay datos en directo, el seguimiento continúa tras tu parada, avisos más fiables, ficha de bici sin saltos de mapa, notificaciones traducidas y limpieza de código antiguo",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.18/busbcn-web-2.13.18.zip",
-  "checksum": "e18ba5461ebad837b113651e68838ded87621ef4576bc93d5d56ae1ad0d1db7a",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.18/BusMet-v2.13.18.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.19/busbcn-web-2.13.19.zip",
+  "checksum": "ff337b6371c095aa88a6970820c6233f90a0516b0aa4e849c85eca7e2f050db4",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.19/BusMet-v2.13.19.apk"
 }
