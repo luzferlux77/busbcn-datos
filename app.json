@@ -1,8 +1,8 @@
 {
-  "version": "2.13.20",
-  "notes": "Ya puedes elegir Català o Castellano al abrir la app y en Ajustes. Traducción al catalán completa, también en notificaciones, avisos de operadores y alertas de Android",
+  "version": "2.13.21",
+  "notes": "Chequeo al arrancar: la app comprueba que los horarios de cada red cargan y están vigentes, repara sola los datos dañados y avisa si algo no se puede arreglar. Resultado en Ajustes",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.20/busbcn-web-2.13.20.zip",
-  "checksum": "5395b93b7b4283db6f48de2ca14f0967419fd32959a728bb825209b50e6aedfb",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.20/BusMet-v2.13.20.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.21/busbcn-web-2.13.21.zip",
+  "checksum": "c4231fe4b760a1fcf5afc9ba8346bc6c1084c4af873dbd2d8be06e87f06a9dcf",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.21/BusMet-v2.13.21.apk"
 }
