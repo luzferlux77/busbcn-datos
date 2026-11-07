@@ -1,8 +1,8 @@
 {
-  "version": "2.13.21",
-  "notes": "Chequeo al arrancar: la app comprueba que los horarios de cada red cargan y están vigentes, repara sola los datos dañados y avisa si algo no se puede arreglar. Resultado en Ajustes",
+  "version": "2.13.22",
+  "notes": "Buses AMB en directo de nuevo en Android (certificado de AMB), se sigue el bus exacto y no se pierden buses que van seguidos; FGC sin trenes duplicados ni fantasma; trenes de Rodalies parados mejor situados",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.21/busbcn-web-2.13.21.zip",
-  "checksum": "c4231fe4b760a1fcf5afc9ba8346bc6c1084c4af873dbd2d8be06e87f06a9dcf",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.21/BusMet-v2.13.21.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.22/busbcn-web-2.13.22.zip",
+  "checksum": "a3a3a036ed01f93d8c5c1e30b0576a49607c90d26e25be47d6274fe3c2c7a14d",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.22/BusMet-v2.13.22.apk"
 }
