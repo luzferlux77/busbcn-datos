@@ -1,8 +1,8 @@
 {
-  "version": "2.13.22",
-  "notes": "Buses AMB en directo de nuevo en Android (certificado de AMB), se sigue el bus exacto y no se pierden buses que van seguidos; FGC sin trenes duplicados ni fantasma; trenes de Rodalies parados mejor situados",
+  "version": "2.13.23",
+  "notes": "Horarios blindados: ninguna fuente lenta o colgada bloquea la parada y un fallo puntual no borra los tiempos; nuevo «Voy dentro» para el bus que acaba de pasar",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.22/busbcn-web-2.13.22.zip",
-  "checksum": "a3a3a036ed01f93d8c5c1e30b0576a49607c90d26e25be47d6274fe3c2c7a14d",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.22/BusMet-v2.13.22.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.23/busbcn-web-2.13.23.zip",
+  "checksum": "b0374eadeac4923e318fb2a284f74a054679fe86ca0e47ddae62573bddfadd11",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.23/BusMet-v2.13.23.apk"
 }
