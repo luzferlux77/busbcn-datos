@@ -1,8 +1,8 @@
 {
-  "version": "2.13.23",
-  "notes": "Horarios blindados: ninguna fuente lenta o colgada bloquea la parada y un fallo puntual no borra los tiempos; nuevo «Voy dentro» para el bus que acaba de pasar",
+  "version": "2.13.24",
+  "notes": "Auditoría: salidas de después de medianoche (Aerobús, N18, L9 y L10) en las paradas y el mapa, GPS más exacto (hora real de cada lectura, sin saltos por lecturas malas) y el seguimiento de un bus ya no se queda pintado al salir de la parada",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.23/busbcn-web-2.13.23.zip",
-  "checksum": "b0374eadeac4923e318fb2a284f74a054679fe86ca0e47ddae62573bddfadd11",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.23/BusMet-v2.13.23.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.24/busbcn-web-2.13.24.zip",
+  "checksum": "9e0aa93b6175d13d4d7b2a96a1add26b2e9cc9abc364d7b297fc9e4a4655d23e",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.24/BusMet-v2.13.24.apk"
 }
