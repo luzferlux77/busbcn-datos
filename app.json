@@ -1,8 +1,8 @@
 {
-  "version": "2.13.26",
-  "notes": "Auditoría, segunda oleada: el mapa ya no se queda sin trenes si falla la primera carga, actualizaciones de red sin mezclar versiones, movimiento de vehículos sin saltos ni retrocesos, el horario del sentido contrario ya no se oculta y las cachés no se pisan entre consultas",
+  "version": "2.13.27",
+  "notes": "Auditoría, tercera oleada: alternativas de ruta que llegan antes (hasta 15 min), hora de Barcelona aunque el móvil esté en otra zona, FGC de madrugada, actualizaciones más seguras (si una llega rota se deshace sola) y pantallas secundarias que se cargan al abrirlas",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.26/busbcn-web-2.13.26.zip",
-  "checksum": "43907e7c214091d09c770e7f7ea61701c3449ed91d62ca6aba3691e17faf4669",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.26/BusMet-v2.13.26.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.27/busbcn-web-2.13.27.zip",
+  "checksum": "8a37bc41efbaba0b443d8c041d54ca51e8d9f4afe5c4a0c8f70735d288422d20",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.27/BusMet-v2.13.27.apk"
 }
