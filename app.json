@@ -1,8 +1,8 @@
 {
-  "version": "2.13.25",
-  "notes": "Auditoría de Gemini, primera oleada: FGC en directo vuelven al planificador, ascensores averiados ya no se dan por accesibles, el mapa no se recarga al tocar ajustes, horas correctas en el cambio de hora, sin bucles de actualización duplicados y avisos de R1 que ya no se confunden con la R11",
+  "version": "2.13.26",
+  "notes": "Auditoría, segunda oleada: el mapa ya no se queda sin trenes si falla la primera carga, actualizaciones de red sin mezclar versiones, movimiento de vehículos sin saltos ni retrocesos, el horario del sentido contrario ya no se oculta y las cachés no se pisan entre consultas",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.25/busbcn-web-2.13.25.zip",
-  "checksum": "94197de256387587396682fcc193d3d4bbe1d73487a2ce829aefff23561a8ba2",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.25/BusMet-v2.13.25.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.26/busbcn-web-2.13.26.zip",
+  "checksum": "43907e7c214091d09c770e7f7ea61701c3449ed91d62ca6aba3691e17faf4669",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.26/BusMet-v2.13.26.apk"
 }
