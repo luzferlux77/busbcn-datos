@@ -1,8 +1,8 @@
 {
-  "version": "2.13.24",
-  "notes": "Auditoría: salidas de después de medianoche (Aerobús, N18, L9 y L10) en las paradas y el mapa, GPS más exacto (hora real de cada lectura, sin saltos por lecturas malas) y el seguimiento de un bus ya no se queda pintado al salir de la parada",
+  "version": "2.13.25",
+  "notes": "Auditoría de Gemini, primera oleada: FGC en directo vuelven al planificador, ascensores averiados ya no se dan por accesibles, el mapa no se recarga al tocar ajustes, horas correctas en el cambio de hora, sin bucles de actualización duplicados y avisos de R1 que ya no se confunden con la R11",
   "native": 2,
-  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.24/busbcn-web-2.13.24.zip",
-  "checksum": "9e0aa93b6175d13d4d7b2a96a1add26b2e9cc9abc364d7b297fc9e4a4655d23e",
-  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.24/BusMet-v2.13.24.apk"
+  "bundle": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.25/busbcn-web-2.13.25.zip",
+  "checksum": "94197de256387587396682fcc193d3d4bbe1d73487a2ce829aefff23561a8ba2",
+  "apk": "https://github.com/luzferlux77/busbcn-datos/releases/download/v2.13.25/BusMet-v2.13.25.apk"
 }

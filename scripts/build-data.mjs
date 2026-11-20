@@ -585,7 +585,7 @@ async function main() {
   const rodalies = processFeed(unzipSync(new Uint8Array(renfeZip), { filter: (f) => GTFS_FILES.test(f.name) }), 'renfe', {
     mode: 'rodalies', P: 'rod:', types: new Set(['2']), keyPrefix: 'R', bit: 16, defColor: 'E2231A', match: false,
     routeFilter: (r) => r.route_id.startsWith('51T'), // núcleo 51 = Rodalies de Catalunya
-    groupShort: true, codeOf: (id) => id.replace(/^0+(?=d)/, ''), bbox: RAIL_AREA, sig: true, tripIds: true,
+    groupShort: true, codeOf: (id) => id.replace(/^0+(?=\d)/, ''), bbox: RAIL_AREA, sig: true, tripIds: true,
     pre: { trips: (l) => l.startsWith('51T'), stop_times: (l) => l.startsWith('51') },
   });
   console.log('Procesando FGC…');
@@ -1143,7 +1143,7 @@ function railGraph(ways) {
   const id = new Map();
   const lat = [], lon = [], adj = [];
   const node = (la, lo) => {
-    const k = la * 1e9 + lo;
+    const k = `${la},${lo}`; // texto: como número (la * 1e9 + lo) perdía precisión y juntaba nodos cercanos
     let i = id.get(k);
     if (i === undefined) {
       i = lat.length;
@@ -1177,7 +1177,7 @@ function railGraph(ways) {
   // «cosido»: en OpenStreetMap a veces dos tramos de la misma vía no comparten el punto de unión (quedan a pocos
   // metros); sin unirlos, el camino daba un rodeo de decenas de km. Cada final de vía se une a lo que tenga a < 25 m
   const ends = [];
-  for (const w of ways) if (w.length >= 4) ends.push(id.get(w[0] * 1e9 + w[1]), id.get(w[w.length - 2] * 1e9 + w[w.length - 1]));
+  for (const w of ways) if (w.length >= 4) ends.push(id.get(`${w[0]},${w[1]}`), id.get(`${w[w.length - 2]},${w[w.length - 1]}`));
   for (const e of ends) {
     const ci = Math.floor(lat[e] / G), cj = Math.floor(lon[e] / G);
     for (let a = ci - 1; a <= ci + 1; a++)

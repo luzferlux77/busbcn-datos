@@ -67,6 +67,8 @@ jobs:
           base=https://luzferlux77.github.io/busbcn-datos/data
           curl -sfL -o site/data/network.json $base/network.json
           curl -sfL -o site/data/version.json $base/version.json
+          curl -sfL -o site/data/places.json $base/places.json || echo "falta places.json"
+          curl -sfL -o site/data/stations.json $base/stations.json || echo "falta stations.json"
           node -e "const n=require('./site/data/network.json');console.log(Object.keys(n.files||{}).join('\n'))" | while read f; do curl -sfL -o "site/data/lines/$f" "$base/lines/$f" || echo "falta $f"; done
           echo "::warning::No se pudo regenerar la red; se publica la anterior con la versión nueva de la app"
 
