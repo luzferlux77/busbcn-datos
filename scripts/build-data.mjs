@@ -41,14 +41,16 @@ async function download(url, name, check = () => true) {
   // cada fuente, hasta 3 intentos (los servidores oficiales a veces dan errores pasajeros, p. ej. 502)
   for (const u of urls) {
     for (let attempt = 1; attempt <= 3; attempt++) {
-      console.log('Descargando', u.replace(/app_key=[^&]+/, 'app_key=***'), attempt > 1 ? `(intento ${attempt})` : '');
+      // la dirección con la clave tapada: es la única que sale en el registro (también en los errores)
+      const shown = u.replace(/app_(key|id)=[^&]+/g, 'app_$1=***');
+      console.log('Descargando', shown, attempt > 1 ? `(intento ${attempt})` : '');
       try {
         const res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (BusMet; datos abiertos)' }, signal: AbortSignal.timeout(180000) });
-        if (!res.ok) throw new Error(`${u.replace(/app_key=[^&]+/, 'app_key=***')} -> ${res.status}`);
+        if (!res.ok) throw new Error(`${shown} -> ${res.status}`);
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${u} -> no es un zip`);
+        if (buf[0] !== 0x50 || buf[1] !== 0x4b) throw new Error(`${shown} -> no es un zip`);
         if (!check(buf)) {
-          err = new Error(`${u} -> fichero incompleto`);
+          err = new Error(`${shown} -> fichero incompleto`);
           console.warn('  ', err.message);
           break; // reintentar la misma fuente no sirve: siguiente fuente
         }
@@ -234,6 +236,8 @@ async function valhallaMatch(cacheKey, pts) {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'user-agent': 'BusBCN-build/1.0 (app personal; ajuste puntual de recorridos de bus)' },
       body: JSON.stringify({ shape: pts.map(([lat, lon]) => ({ lat, lon })), costing: 'bus', shape_match: 'map_snap', directions_type: 'none' }),
+      // con plazo: un servidor colgado no deja la generación de datos parada hasta que GitHub la mata
+      signal: AbortSignal.timeout(45000),
     });
     const j = await r.json();
     res = r.ok && j.trip ? { src: hash, pts: j.trip.legs.flatMap((l) => decodePolyline6(l.shape)) } : { src: hash, fail: j.error || r.status };
